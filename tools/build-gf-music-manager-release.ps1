@@ -313,6 +313,7 @@ function Assert-NoLocalEnvironmentReferences {
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $projectPath = Join-Path $repoRoot 'src\GfMusicManager\Desktop\GfMusicManager.Desktop.csproj'
 $readmePath = Join-Path $repoRoot 'README-GF-Music-Manager.md'
+$readmeEnglishPath = Join-Path $repoRoot 'README-GF-Music-Manager.en.md'
 $licensePath = Join-Path $repoRoot 'LICENSE-GF-MUSIC-MANAGER.txt'
 $thirdPartyNoticesPath = Join-Path $repoRoot 'THIRD-PARTY-NOTICES-GF-MUSIC-MANAGER.txt'
 $thirdPartyLicenseDirectory = Join-Path $repoRoot 'licenses\GfMusicManager'
@@ -327,6 +328,10 @@ if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
 
 if (-not (Test-Path -LiteralPath $readmePath -PathType Leaf)) {
     throw "Release README was not found: $readmePath"
+}
+
+if (-not (Test-Path -LiteralPath $readmeEnglishPath -PathType Leaf)) {
+    throw "English release README was not found: $readmeEnglishPath"
 }
 
 if (-not (Test-Path -LiteralPath $licensePath -PathType Leaf)) {
@@ -402,8 +407,10 @@ try {
 
         $documentationDirectory = Join-Path $packageDirectory 'Documentation'
         New-Item -ItemType Directory -Path $documentationDirectory -Force | Out-Null
+        Copy-Item -LiteralPath $readmeEnglishPath -Destination (
+            Join-Path $documentationDirectory 'README.md') -Force
         Copy-Item -LiteralPath $readmePath -Destination (
-            Join-Path $documentationDirectory 'README-GF-Music-Manager.md') -Force
+            Join-Path $documentationDirectory 'README.ja.md') -Force
         Copy-Item -LiteralPath $licensePath -Destination (
             Join-Path $documentationDirectory 'LICENSE.txt') -Force
         Copy-Item -LiteralPath $thirdPartyNoticesPath -Destination (
@@ -432,6 +439,7 @@ try {
     $sourceItems = @(
         'global.json',
         'README-GF-Music-Manager.md',
+        'README-GF-Music-Manager.en.md',
         'LICENSE-GF-MUSIC-MANAGER.txt',
         'THIRD-PARTY-NOTICES-GF-MUSIC-MANAGER.txt',
         'licenses\GfMusicManager',
