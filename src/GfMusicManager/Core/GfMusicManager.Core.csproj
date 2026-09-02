@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Common\SkyrimScan.Core\SkyrimScan.Core.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+    <PackageReference Include="System.Text.Json" Version="9.0.1" />
+    <PackageReference Include="Vortice.XAudio2" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\Strings.ja-JP.json"
+                      WithCulture="false"
+                      LogicalName="GfMusicManager.Core.Localization.Strings.ja-JP.json" />
+    <EmbeddedResource Include="Localization\Strings.en-US.json"
+                      WithCulture="false"
+                      LogicalName="GfMusicManager.Core.Localization.Strings.en-US.json" />
+  </ItemGroup>
+</Project>

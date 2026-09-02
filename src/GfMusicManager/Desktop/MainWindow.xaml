@@ -1,0 +1,1032 @@
+<Window x:Class="GfMusicManager.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:GfMusicManager.Desktop.Localization"
+        Title="{loc:Loc Main.WindowTitle}"
+        Width="1480"
+        Height="900"
+        MinWidth="1120"
+        MinHeight="720"
+        WindowStartupLocation="CenterScreen"
+        Background="#0f141c"
+        Foreground="#edf2f8"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <SolidColorBrush x:Key="WindowBackground" Color="#0f141c" />
+        <SolidColorBrush x:Key="SidebarBackground" Color="#151b24" />
+        <SolidColorBrush x:Key="PanelBackground" Color="#1b2330" />
+        <SolidColorBrush x:Key="PanelRaisedBackground" Color="#222c3b" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#344154" />
+        <SolidColorBrush x:Key="MutedForeground" Color="#9aa8ba" />
+        <SolidColorBrush x:Key="BlueAccent" Color="#78a9e8" />
+        <SolidColorBrush x:Key="BluePanel" Color="#263d5c" />
+        <SolidColorBrush x:Key="GreenAccent" Color="#8bcaa6" />
+        <SolidColorBrush x:Key="GreenPanel" Color="#213b34" />
+        <SolidColorBrush x:Key="AmberAccent" Color="#e7b76a" />
+        <SolidColorBrush x:Key="AmberPanel" Color="#493821" />
+        <SolidColorBrush x:Key="RedAccent" Color="#ee8c8c" />
+        <SolidColorBrush x:Key="RedPanel" Color="#482a32" />
+
+        <Geometry x:Key="ScanIconGeometry">M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0-7.99,3.58-7.99,8s3.57,8 7.99,8c3.73,0 6.84,-2.55 7.73,-6h-2.08c-.82,2.33-3.04,4-5.65,4-3.31,0-6-2.69-6-6s2.69-6 6-6c1.66,0 3.14,.69 4.22,1.78L13,11h7V4z</Geometry>
+        <Geometry x:Key="SettingsIconGeometry">M19.43,12.98c.04,-.32 .07,-.65 .07,-.98s-.02,-.66 -.07,-.98l2.11,-1.65c.19,-.15 .24,-.42 .12,-.64l-2,-3.46c-.12,-.22 -.37,-.31 -.6,-.22l-2.49,1c-.52,-.4 -1.08,-.73 -1.69,-.98L14.5,2.42C14.47,2.18 14.25,2 14,2h-4c-.25,0 -.46,.18 -.5,.42L9.12,5.07c-.61,.25 -1.17,.59 -1.69,.98l-2.49,-1c-.23,-.08 -.48,0 -.6,.22l-2,3.46c-.13,.22 -.07,.49 .12,.64l2.11,1.65c-.04,.32 -.08,.65 -.08,.98s.03,.66 .08,.98l-2.11,1.65c-.19,.15 -.25,.42 -.12,.64l2,3.46c.12,.22 .37,.31 .6,.22l2.49,-1c.52,.4 1.08,.73 1.69,.98l.38,2.65c.04,.24 .25,.42 .5,.42h4c.25,0 .46,-.18 .5,-.42l.38,-2.65c.61,-.25 1.17,-.58 1.69,-.98l2.49,1c.23,.08 .48,0 .6,-.22l2,-3.46c.12,-.22 .07,-.49 -.12,-.64l-2.11,-1.65zM12,15.5A3.5,3.5 0 1 1 12,8a3.5,3.5 0 0 1 0,7.5z</Geometry>
+        <Geometry x:Key="MusicIconGeometry">M9,18V5l12,-2v13M9,18a3,3 0 1 1 -6,0a3,3 0 0 1 6,0M21,16a3,3 0 1 1 -6,0a3,3 0 0 1 6,0</Geometry>
+        <Geometry x:Key="SearchIconGeometry">M10.5,3a7.5,7.5 0 1 0 4.72,13.33L20.39,21.5L21.8,20.09L16.99,15.28A7.5,7.5 0 0 0 10.5,3M10.5,5a5.5,5.5 0 1 1 0,11a5.5,5.5 0 0 1 0,-11</Geometry>
+        <Geometry x:Key="FilterIconGeometry">M3,4H21L14,12V19L10,21V12Z</Geometry>
+        <Geometry x:Key="WarningIconGeometry">M12,3L22,20H2ZM11,9V14H13V9ZM11,16V18H13V16Z</Geometry>
+        <Geometry x:Key="DisabledIconGeometry">M4,4H20V20H4ZM7,7L17,17M17,7L7,17</Geometry>
+        <Geometry x:Key="CheckIconGeometry">M9,16.17L4.83,12L3.41,13.41L9,19L21,7L19.59,5.59Z</Geometry>
+        <Geometry x:Key="CloseIconGeometry">M6,5H8L12,9L16,5H18L13,11L18,16H16L12,13L8,17H6L11,11Z</Geometry>
+        <Geometry x:Key="ListIconGeometry">M4,5H20V7H4ZM4,11H20V13H4ZM4,17H20V19H4Z</Geometry>
+        <Geometry x:Key="DocumentIconGeometry">M5,2H15L19,6V22H5ZM14,3.5V7H17.5Z</Geometry>
+        <Geometry x:Key="FolderIconGeometry">M3,4H10L12,6H21C22.1,6 23,6.9 23,8V19C23,20.1 22.1,21 21,21H3C1.9,21 1,20.1 1,19V6C1,4.9 1.9,4 3,4Z</Geometry>
+
+        <Style x:Key="MmButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#edf2f8" />
+            <Setter Property="Background" Value="#273243" />
+            <Setter Property="BorderBrush" Value="#42536a" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#33445a" />
+                                <Setter Property="BorderBrush" Value="#637e9f" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#41648f" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource MmButton}">
+            <Setter Property="Background" Value="#4e79ae" />
+            <Setter Property="BorderBrush" Value="#78a9e8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource MmButton}">
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+
+        <Style x:Key="HeaderIconButton" TargetType="Button" BasedOn="{StaticResource MmButton}">
+            <Setter Property="Padding" Value="11,8" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="HeaderCheckBox" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#d6deea" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+
+        <Style x:Key="NavButton" TargetType="Button" BasedOn="{StaticResource MmButton}">
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource MutedForeground}" />
+            <Setter Property="Padding" Value="11,9" />
+        </Style>
+
+        <Style x:Key="SelectedNavButton" TargetType="Button" BasedOn="{StaticResource NavButton}">
+            <Setter Property="Background" Value="{StaticResource BluePanel}" />
+            <Setter Property="BorderBrush" Value="#476b99" />
+            <Setter Property="Foreground" Value="#dceaff" />
+        </Style>
+
+        <Style x:Key="SourceNavButton" TargetType="Button" BasedOn="{StaticResource NavButton}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BluePanel}" />
+                    <Setter Property="BorderBrush" Value="#476b99" />
+                    <Setter Property="Foreground" Value="#dceaff" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="TextInput" TargetType="TextBox">
+            <Setter Property="Foreground" Value="#edf2f8" />
+            <Setter Property="Background" Value="#141b25" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="9,4" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="ProfileComboBoxItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#1b2330" />
+            <Setter Property="Background" Value="#ffffff" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="#10243d" />
+                    <Setter Property="Background" Value="#d9e9ff" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#10243d" />
+                    <Setter Property="Background" Value="#e9f2ff" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ProfileComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#1b2330" />
+            <Setter Property="Background" Value="#141b25" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="7,2" />
+            <Setter Property="Width" Value="190" />
+            <Setter Property="Height" Value="27" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#d6deea" />
+            <Setter Property="Margin" Value="0,5,0,5" />
+        </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="{StaticResource PanelBackground}" />
+            <Setter Property="Foreground" Value="#edf2f8" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#2d3848" />
+            <Setter Property="VerticalGridLinesBrush" Value="Transparent" />
+            <Setter Property="RowBackground" Value="#1b2330" />
+            <Setter Property="AlternatingRowBackground" Value="#202a38" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="ColumnHeaderHeight" Value="34" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="CanUserResizeRows" Value="False" />
+            <Setter Property="SelectionUnit" Value="FullRow" />
+            <Setter Property="AutoGenerateColumns" Value="False" />
+        </Style>
+
+        <Style TargetType="DataGridRow">
+            <Setter Property="MinHeight" Value="54" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#263140" />
+            <Setter Property="Foreground" Value="#9eacbf" />
+            <Setter Property="BorderBrush" Value="#344154" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="9,6" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="#edf2f8" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Padding" Value="8,0" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#304b6c" />
+                    <Setter Property="Foreground" Value="#ffffff" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="HandlingBorder" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource GreenPanel}" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RequiresCopy}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource AmberPanel}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasWarning}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource RedPanel}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="HandlingText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource GreenAccent}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RequiresCopy}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource AmberAccent}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasWarning}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource RedAccent}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="112" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="72" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#171e29" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="22,13">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Width="86" Height="86" CornerRadius="43" Background="#0f141c">
+                    <Border.Clip>
+                        <EllipseGeometry Center="43,43" RadiusX="43" RadiusY="43" />
+                    </Border.Clip>
+                    <Image Source="/GfMusicManager;component/Assets/gf-music-manager-full.png" Stretch="UniformToFill" />
+                </Border>
+
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{loc:Loc Main.WindowTitle}" FontSize="22" FontWeight="SemiBold" />
+                    <TextBlock Text="{loc:Loc Main.BrandSubtitle}" Foreground="{StaticResource MutedForeground}" FontSize="12" Margin="0,3,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="#202b3a" BorderBrush="#40536d" BorderThickness="1" CornerRadius="9" Padding="12,8" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{loc:Loc Main.ProfileLabel}" FontSize="10" Foreground="{StaticResource MutedForeground}" />
+                            <TextBlock x:Name="ProfileNameText" Text="{loc:Loc Main.Unset}" FontSize="12" FontWeight="SemiBold" Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Button x:Name="RescanButton" Style="{StaticResource HeaderIconButton}" Click="RescanButton_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource ScanIconGeometry}" Fill="#f7fbff" Width="16" Height="16" Stretch="Uniform" Margin="0,0,7,0" />
+                            <TextBlock Text="{loc:Loc Main.Scan}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SettingsButton" Style="{StaticResource HeaderIconButton}" Click="SettingsButton_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource SettingsIconGeometry}" Fill="#dceaff" Width="16" Height="16" Stretch="Uniform" Margin="0,0,7,0" />
+                            <TextBlock Text="{loc:Loc Main.Settings}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="MusicTypeManagementButton"
+                            Style="{StaticResource HeaderIconButton}"
+                            IsEnabled="False"
+                            Click="MusicTypeManagementButton_Click"
+                            ToolTip="{loc:Loc Main.TypeManagementTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource ListIconGeometry}" Fill="#dceaff" Width="16" Height="16" Stretch="Uniform" Margin="0,0,7,0" />
+                            <TextBlock Text="{loc:Loc Main.TypeManagement}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Border Background="#202b3a" BorderBrush="#40536d" BorderThickness="1" CornerRadius="7" Padding="10,7" Margin="0,0,8,0">
+                        <CheckBox x:Name="IncludeDisabledCheckBox"
+                                  Content="{loc:Loc Main.IncludeDisabledMods}"
+                                  Style="{StaticResource HeaderCheckBox}"
+                                  Checked="IncludeDisabledCheckBox_Changed"
+                                  Unchecked="IncludeDisabledCheckBox_Changed" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="346" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="{StaticResource SidebarBackground}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0" Padding="16,20">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Bottom">
+                        <Border Background="#1c2532" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="11" Margin="0,18,0,0">
+                            <StackPanel>
+                                <TextBlock Text="{loc:Loc Main.Mo2Settings}" Foreground="{StaticResource MutedForeground}" FontSize="10" />
+                                <TextBlock x:Name="ScanRootText" Text="{loc:Loc Main.Unset}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="ProfileSummaryText" Text="{loc:Loc Main.ProfileSummaryUnset}" Foreground="#c6d0df" FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="ScanRootStatusText" Text="{loc:Loc Main.ScanBefore}" Foreground="{StaticResource MutedForeground}" FontSize="10" Margin="0,3,0,0" />
+                                <TextBlock x:Name="ScanSummaryText" Text="{loc:Loc Main.ScanNotRun}" Foreground="#7f8da2" FontSize="10" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Main.Library}" FontSize="11" Foreground="{StaticResource MutedForeground}" Margin="6,0,0,8" />
+                        <Button x:Name="AllLibraryButton" Style="{StaticResource SelectedNavButton}" Click="AllSourcesButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource MusicIconGeometry}" Fill="#dceaff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" />
+                                <TextBlock Text="{loc:Loc Main.AllMusic}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="AdoptedLibraryButton" Style="{StaticResource NavButton}" Click="SelectedOnlyButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource CheckIconGeometry}" Fill="#8bcaa6" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" />
+                                <TextBlock Text="{loc:Loc Main.Adopted}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="WarningLibraryButton" Style="{StaticResource NavButton}" Click="WarningOnlyButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource WarningIconGeometry}" Fill="#ee8c8c" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" />
+                                <TextBlock Text="{loc:Loc Main.Warning}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <TextBlock Text="{loc:Loc Main.ScannedMods}" FontSize="11" Foreground="{StaticResource MutedForeground}" Margin="6,24,0,8" />
+                        <Button x:Name="AllSourcesButton" Style="{StaticResource SelectedNavButton}" Click="AllSourcesButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource MusicIconGeometry}" Fill="#dceaff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" />
+                                <TextBlock x:Name="AllSourcesButtonText" Text="{loc:Loc Main.AllModsCountInitial}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <ItemsControl x:Name="SourceList" Margin="0,2,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Tag="{Binding Name}"
+                                            Style="{StaticResource SourceNavButton}"
+                                            HorizontalContentAlignment="Stretch"
+                                            ToolTip="{Binding Name}"
+                                            Click="SourceButton_Click">
+                                        <Button.Content>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Path Data="{StaticResource MusicIconGeometry}"
+                                                      Fill="#9aa8ba"
+                                                      Width="13"
+                                                      Height="13"
+                                                      Stretch="Uniform"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0,0,7,0" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <Border Grid.Column="2"
+                                                        Background="#263d5c"
+                                                        BorderBrush="#476b99"
+                                                        BorderThickness="1"
+                                                        CornerRadius="8"
+                                                        Padding="7,3"
+                                                        Margin="8,0,0,0">
+                                                    <TextBlock Text="{Binding CountText}"
+                                                               Foreground="#dceaff"
+                                                               FontSize="10"
+                                                               FontWeight="SemiBold" />
+                                                </Border>
+                                            </Grid>
+                                        </Button.Content>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <Grid Grid.Column="1" Margin="20,20,18,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Main.LibraryHeading}" FontSize="21" FontWeight="SemiBold" />
+                        <TextBlock x:Name="LibrarySubheadingText" Text="{loc:Loc Main.LibraryDescription}" Foreground="{StaticResource MutedForeground}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBox Grid.Column="1" x:Name="SearchTextBox" Style="{StaticResource TextInput}" ToolTip="{loc:Loc Main.SearchTracksTooltip}" />
+                    <Button Grid.Column="2" x:Name="SearchButton" Style="{StaticResource MmButton}" Margin="8,4,0,0" Click="SearchButton_Click" ToolTip="{loc:Loc Main.SearchTooltip}">
+                        <Path Data="{StaticResource SearchIconGeometry}" Fill="#dceaff" Width="15" Height="15" Stretch="Uniform" />
+                    </Button>
+                    <Button x:Name="FilterButton"
+                            Grid.Column="3"
+                            Style="{StaticResource SmallButton}"
+                            Margin="8,4,0,0"
+                            Click="FilterButton_Click"
+                            ToolTip="{loc:Loc Main.FilterTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource FilterIconGeometry}" Fill="#dceaff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" />
+                            <TextBlock x:Name="FilterButtonText" Text="{loc:Loc Main.Filter}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <WrapPanel Grid.Row="1" Margin="0,0,0,12">
+                    <Border Background="#202a38" CornerRadius="8" Padding="10,7" Margin="0,0,8,0"><TextBlock x:Name="TrackCountText" Text="{loc:Loc Main.TrackCountInitial}" Foreground="#dce7f5" FontSize="11" /></Border>
+                    <Border Background="{StaticResource GreenPanel}" CornerRadius="8" Padding="10,7" Margin="0,0,8,0" ToolTip="{loc:Loc Main.ReferenceTooltip}"><TextBlock x:Name="ReferenceCountText" Text="{loc:Loc Main.ReferenceCountInitial}" Foreground="{StaticResource GreenAccent}" FontSize="11" /></Border>
+                    <Border Background="{StaticResource AmberPanel}" CornerRadius="8" Padding="10,7" Margin="0,0,8,0" ToolTip="{loc:Loc Main.CopyTooltip}"><TextBlock x:Name="CopyCountText" Text="{loc:Loc Main.CopyCountInitial}" Foreground="{StaticResource AmberAccent}" FontSize="11" /></Border>
+                    <Button x:Name="WarningCountButton"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Click="WarningDetailsButton_Click"
+                            ToolTip="{loc:Loc Main.WarningCountTooltip}">
+                        <Border Background="{StaticResource RedPanel}" CornerRadius="8" Padding="10,7">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource WarningIconGeometry}" Fill="{StaticResource RedAccent}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" />
+                                <TextBlock x:Name="WarningCountText" Text="{loc:Loc Main.WarningCountInitial}" Foreground="{StaticResource RedAccent}" FontSize="11" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                    <Button x:Name="DisabledCountButton"
+                            Style="{StaticResource SmallButton}"
+                            Background="{StaticResource PanelBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            Padding="0"
+                            Margin="8,0,0,0"
+                            Click="DisabledCountButton_Click"
+                             ToolTip="{loc:Loc Main.DisabledCountTooltip}">
+                        <Border Background="Transparent" CornerRadius="8" Padding="10,7">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource DisabledIconGeometry}" Fill="{StaticResource AmberAccent}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" />
+                                <TextBlock x:Name="DisabledCountText" Text="{loc:Loc Main.DisabledCountInitial}" Foreground="{StaticResource AmberAccent}" FontSize="11" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                    <Button x:Name="UnusedCountButton"
+                            Style="{StaticResource SmallButton}"
+                            Background="{StaticResource PanelBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            Padding="0"
+                            Margin="8,0,8,0"
+                            Click="UnusedCountButton_Click"
+                             ToolTip="{loc:Loc Main.UnusedCountTooltip}">
+                        <Border Background="Transparent" CornerRadius="8" Padding="10,7">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource ListIconGeometry}" Fill="{StaticResource MutedForeground}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" />
+                                <TextBlock x:Name="UnusedCountText" Text="{loc:Loc Main.UnusedCountInitial}" Foreground="{StaticResource MutedForeground}" FontSize="11" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                    <Button x:Name="VisibleSelectionToggleButton"
+                            Style="{StaticResource SmallButton}"
+                            Margin="8,0,8,0"
+                            Click="VisibleSelectionToggleButton_Click"
+                            ToolTip="{loc:Loc Main.VisibleSelectionTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource CheckIconGeometry}" Fill="#dceaff" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" />
+                            <TextBlock x:Name="VisibleSelectionToggleText" Text="{loc:Loc Main.VisibleSelectionAll}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+
+                <Grid Grid.Row="2">
+                <DataGrid x:Name="TrackGrid"
+                          SelectionChanged="TrackGrid_SelectionChanged"
+                          EnableRowVirtualization="True"
+                          EnableColumnVirtualization="True"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          ScrollViewer.CanContentScroll="True">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="{loc:Loc Main.SelectColumn}" Width="52">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="{loc:Loc Main.SelectTrackTooltip}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="{loc:Loc Main.StatusColumn}" Width="64">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Padding="7,3" CornerRadius="8" HorizontalAlignment="Left">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{StaticResource GreenPanel}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsAdopted}" Value="False">
+                                                        <Setter Property="Background" Value="{StaticResource RedPanel}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding AdoptionStatusText}" FontSize="10" HorizontalAlignment="Center" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="{loc:Loc Main.PreviewColumn}" Width="52">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding PreviewButtonContent}" Style="{StaticResource SmallButton}" Padding="6,4" Margin="0" Click="PreviewTrackButton_Click" ToolTip="{Binding PreviewButtonToolTip}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="{loc:Loc Main.TitleColumn}" Width="2.1*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding TrackMeta}" Foreground="{StaticResource MutedForeground}" FontSize="10" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="{loc:Loc Main.SourceModColumn}" Binding="{Binding Source}" Width="1.25*" />
+                        <DataGridTemplateColumn Header="{loc:Loc Main.MusicTypeColumn}" Width="1.25*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding MusicTypeCountText}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="{loc:Loc Main.AudioColumn}" Width="90">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource HandlingBorder}" HorizontalAlignment="Left">
+                                        <TextBlock Text="{Binding HandlingText}" Style="{StaticResource HandlingText}" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <Border x:Name="EmptyLibraryBorder"
+                        Background="{StaticResource PanelBackground}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        Padding="24"
+                        Visibility="Visible">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="{loc:Loc Main.EmptyLibrary}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Main.EmptyLibraryInstruction}"
+                                   Foreground="{StaticResource MutedForeground}"
+                                   Margin="0,8,0,0"
+                                   HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="ScanProgressOverlay"
+                        Panel.ZIndex="20"
+                        Background="#D9141B26"
+                        Visibility="Collapsed">
+                    <Border Width="420"
+                            Padding="24"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="{StaticResource PanelRaisedBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="12">
+                        <StackPanel>
+                            <TextBlock x:Name="ScanProgressTitleText"
+                                       Text="{loc:Loc Main.Scanning}"
+                                       FontSize="17"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" />
+                            <ProgressBar x:Name="ScanProgressBar"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         Value="0"
+                                         Height="10"
+                                         Margin="0,18,0,10"
+                                         Background="#3b485b"
+                                         Foreground="{StaticResource BlueAccent}"
+                                         BorderThickness="0" />
+                            <StackPanel x:Name="ScanProgressCountPanel"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Center">
+                                <Path Data="{StaticResource FolderIconGeometry}"
+                                      Fill="{StaticResource BlueAccent}"
+                                      Width="14"
+                                      Height="14"
+                                      Stretch="Uniform"
+                                      Margin="0,0,5,0" />
+                                <TextBlock x:Name="ScanProgressModText"
+                                            Text="{loc:Loc Main.ProgressMods}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <Path Data="{StaticResource DocumentIconGeometry}"
+                                      Fill="{StaticResource MutedForeground}"
+                                      Width="14"
+                                      Height="14"
+                                      Stretch="Uniform"
+                                      Margin="14,0,5,0" />
+                                <TextBlock x:Name="ScanProgressPluginText"
+                                            Text="{loc:Loc Main.ProgressPlugins}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock x:Name="ScanProgressSummaryText"
+                                       Text=""
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Visibility="Collapsed" />
+                            <TextBlock x:Name="ScanProgressStageText"
+                                        Text="{loc:Loc Main.Preparing}"
+                                       Foreground="{StaticResource MutedForeground}"
+                                       FontSize="10"
+                                       Margin="0,6,0,0"
+                                       HorizontalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Border>
+                </Grid>
+            </Grid>
+
+            <Border Grid.Column="2" Background="{StaticResource PanelBackground}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0" Padding="18,20">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock x:Name="SelectedTrackTitleText" Text="{loc:Loc Main.SelectedTrackPrompt}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{loc:Loc Main.SelectedTrackLabel}" Foreground="{StaticResource MutedForeground}" FontSize="11" Margin="0,3,0,0" />
+
+                        <Border Background="{StaticResource PanelRaisedBackground}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="13" Margin="0,17,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="42" Height="42" CornerRadius="21" Background="#3c5d85" Margin="0,0,10,0">
+                                        <TextBlock Text="♫" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#dceaff" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock x:Name="NowPlayingTitleText" Text="{loc:Loc Main.NotSelected}" FontSize="12" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="PreviewStatusText" Text="{loc:Loc Main.PreviewAfterScan}" Foreground="{StaticResource MutedForeground}" FontSize="10" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <Slider x:Name="PreviewSeekSlider"
+                                        Minimum="0"
+                                        Maximum="1"
+                                        Value="0"
+                                        Height="14"
+                                        Margin="0,10,0,1"
+                                        VerticalAlignment="Center"
+                                        IsMoveToPointEnabled="True"
+                                        PreviewMouseLeftButtonDown="PreviewSeekSlider_PreviewMouseLeftButtonDown"
+                                        PreviewMouseMove="PreviewSeekSlider_PreviewMouseMove"
+                                        PreviewMouseLeftButtonUp="PreviewSeekSlider_PreviewMouseLeftButtonUp"
+                                         ToolTip="{loc:Loc Main.SeekTooltip}" />
+                                <Grid>
+                                    <TextBlock x:Name="PreviewPositionText" Text="00:00" Foreground="{StaticResource MutedForeground}" FontSize="9" />
+                                    <TextBlock x:Name="PreviewDurationText" Text="00:00" Foreground="{StaticResource MutedForeground}" FontSize="9" HorizontalAlignment="Right" />
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,9,0,0">
+                                    <Button Content="◀◀" Style="{StaticResource MmButton}" Padding="5,3" FontSize="10" Click="PlayerButton_Click" />
+                                    <Button x:Name="PlayerToggleButton" Content="▶" Style="{StaticResource PrimaryButton}" Padding="9,4" FontSize="11" Click="PlayerButton_Click" />
+                                    <Button Content="▶▶" Style="{StaticResource MmButton}" Padding="5,3" FontSize="10" Click="PlayerButton_Click" />
+                                </StackPanel>
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{loc:Loc Main.Volume}" Foreground="{StaticResource MutedForeground}" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <Slider x:Name="PreviewVolumeSlider" Grid.Column="1" Minimum="0" Maximum="100" Value="100" TickFrequency="10" IsSnapToTickEnabled="False" VerticalAlignment="Center" ValueChanged="PreviewVolumeSlider_ValueChanged" ToolTip="{loc:Loc Main.VolumeTooltip}" />
+                                    <TextBlock x:Name="PreviewVolumeText" Grid.Column="2" Text="100%" Foreground="{StaticResource MutedForeground}" FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="{loc:Loc Main.ImportedContent}" Foreground="{StaticResource MutedForeground}" FontSize="10" FontWeight="SemiBold" Margin="0,21,0,7" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0" Text="{loc:Loc Main.SourceMod}" Foreground="{StaticResource MutedForeground}" Margin="0,5,12,5" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="SelectedSourceText" Text="—" TextAlignment="Right" Margin="0,5,0,5" />
+                            <TextBlock Grid.Row="1" Text="{loc:Loc Main.Audio}" Foreground="{StaticResource MutedForeground}" Margin="0,5,12,5" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" x:Name="SelectedHandlingText" Text="—" Foreground="{StaticResource GreenAccent}" TextAlignment="Right" Margin="0,5,0,5" />
+                            <TextBlock Grid.Row="2" Text="{loc:Loc Main.DefinitionSource}" Foreground="{StaticResource MutedForeground}" Margin="0,5,12,5" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" x:Name="SelectedPlacementText" Text="—" TextAlignment="Right" Margin="0,5,0,5" />
+                            <TextBlock Grid.Row="3" Text="{loc:Loc Main.GenerationTarget}" Foreground="{StaticResource MutedForeground}" Margin="0,5,12,5" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" x:Name="SelectedAdoptionText" Text="—" Foreground="{StaticResource GreenAccent}" TextAlignment="Right" Margin="0,5,0,5" />
+                            <TextBlock Grid.Row="4" Text="{loc:Loc Main.State}" Foreground="{StaticResource MutedForeground}" Margin="0,5,12,5" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" x:Name="SelectedStatusText" Text="{loc:Loc Main.ScanWaiting}" Foreground="{StaticResource MutedForeground}" TextAlignment="Right" Margin="0,5,0,5" />
+                        </Grid>
+
+                        <Border x:Name="WarningBorder" Background="{StaticResource AmberPanel}" BorderBrush="#7b5a30" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,15,0,0" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="WarningText" TextWrapping="Wrap" Foreground="#f0cb8d" FontSize="11" />
+                                <Button x:Name="WarningDetailsButton"
+                                        Style="{StaticResource SmallButton}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,9,0,0"
+                                        Visibility="Collapsed"
+                                        Click="WarningDetailsButton_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Data="{StaticResource WarningIconGeometry}" Fill="#f0cb8d" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" />
+                                        <TextBlock Text="{loc:Loc Main.WarningDetails}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+
+                        <Button Style="{StaticResource SmallButton}" HorizontalAlignment="Left" Margin="0,17,0,0" Click="DetailsButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource DocumentIconGeometry}" Fill="#dceaff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" />
+                                <TextBlock Text="{loc:Loc Main.DefinitionDetails}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#171e29" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,11">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="SelectionSummaryText" Text="{loc:Loc Main.SelectionSummaryInitial}" FontWeight="SemiBold" Margin="0,0,16,0" />
+                    <TextBlock x:Name="ReferenceSummaryText" Text="{loc:Loc Main.ReferenceSummaryInitial}" Foreground="{StaticResource GreenAccent}" Margin="0,0,14,0" />
+                    <TextBlock x:Name="CopySummaryText" Text="{loc:Loc Main.CopySummaryInitial}" Foreground="{StaticResource AmberAccent}" Margin="0,0,14,0" />
+                    <Button x:Name="WarningSummaryButton"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Click="WarningDetailsButton_Click"
+                             ToolTip="{loc:Loc Main.WarningSummaryTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource WarningIconGeometry}" Fill="{StaticResource RedAccent}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,5,0" />
+                            <TextBlock x:Name="WarningSummaryText" Text="{loc:Loc Main.WarningSummaryInitial}" Foreground="{StaticResource RedAccent}" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="DisabledSummaryButton"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Margin="14,0,0,0"
+                            Click="DisabledCountButton_Click"
+                             ToolTip="{loc:Loc Main.DisabledSummaryTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource DisabledIconGeometry}" Fill="{StaticResource AmberAccent}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,5,0" />
+                            <TextBlock x:Name="DisabledSummaryText" Text="{loc:Loc Main.DisabledSummaryInitial}" Foreground="{StaticResource AmberAccent}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="BulkMusicTypeButton" Style="{StaticResource SmallButton}" Click="BulkMusicTypeButton_Click" ToolTip="{loc:Loc Main.BulkMusicTypeTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource ListIconGeometry}" Fill="#dceaff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" />
+                            <TextBlock Text="{loc:Loc Main.BulkMusicType}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SelectAdoptButton" Style="{StaticResource SmallButton}" Click="SelectAllButton_Click" ToolTip="{loc:Loc Main.AdoptSelectionTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource CheckIconGeometry}" Fill="#dceaff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" />
+                            <TextBlock Text="{loc:Loc Main.AdoptSelection}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ExcludeSelectionButton" Style="{StaticResource SmallButton}" Click="ClearSelectionButton_Click" ToolTip="{loc:Loc Main.ExcludeSelectionTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource CloseIconGeometry}" Fill="#dceaff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" />
+                            <TextBlock Text="{loc:Loc Main.ExcludeSelection}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="OpenReviewButton" Style="{StaticResource PrimaryButton}" Click="OpenReviewButton_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource DocumentIconGeometry}" Fill="#f7fbff" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" />
+                            <TextBlock Text="{loc:Loc Main.ReviewGeneration}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid x:Name="SettingsOverlay" Grid.RowSpan="3" Background="#99080d14" Visibility="Collapsed">
+            <Border Width="640" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#202a38" BorderBrush="#526b8b" BorderThickness="1" CornerRadius="14" Padding="24">
+                <StackPanel>
+                    <TextBlock Text="{loc:Loc Main.Mo2Settings}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{loc:Loc Main.SettingsDescription}" Foreground="{StaticResource MutedForeground}" TextWrapping="Wrap" FontSize="12" Margin="0,5,0,18" />
+
+                    <TextBlock Text="{loc:Loc Main.Mo2RootFolder}" Foreground="{StaticResource MutedForeground}" FontSize="10" />
+                    <TextBlock Text="{loc:Loc Main.Mo2RootInstruction}" Foreground="#c6d0df" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0" />
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="SettingsMo2RootTextBox" Style="{StaticResource TextInput}" IsReadOnly="True" ToolTip="{loc:Loc Main.Mo2RootTooltip}" />
+                        <Button Grid.Column="1" x:Name="BrowseMo2RootButton" Content="{loc:Loc Main.Browse}" Style="{StaticResource MmButton}" Margin="8,4,0,0" Click="BrowseMo2RootButton_Click" />
+                    </Grid>
+                    <TextBlock x:Name="SettingsRootStatusText" Text="{loc:Loc Main.Unset}" Foreground="{StaticResource MutedForeground}" FontSize="10" Margin="0,3,0,15" />
+
+                    <TextBlock Text="{loc:Loc Main.ProfileLabel}" Foreground="{StaticResource MutedForeground}" FontSize="10" />
+                    <ComboBox x:Name="SettingsProfileComboBox"
+                              Style="{StaticResource ProfileComboBoxStyle}"
+                              ItemContainerStyle="{StaticResource ProfileComboBoxItemStyle}"
+                              Width="360"
+                              HorizontalAlignment="Left"
+                              IsEditable="True"
+                              IsReadOnly="True"
+                               Text="{loc:Loc Main.ProfileSelect}"
+                              SelectionChanged="SettingsProfileComboBox_SelectionChanged" />
+                    <TextBlock x:Name="SettingsProfileStatusText" Text="{loc:Loc Main.ProfileLoadStatus}" Foreground="{StaticResource MutedForeground}" TextWrapping="Wrap" FontSize="10" Margin="0,4,0,15" />
+
+                    <Border Background="#1a2330" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="{loc:Loc Settings.Language.Label}"
+                                       Foreground="{StaticResource MutedForeground}"
+                                       FontSize="10" />
+                            <ComboBox x:Name="LanguageComboBox"
+                              DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="Code"
+                                      Width="220"
+                                      HorizontalAlignment="Left"
+                                      Margin="0,7,0,0" />
+                            <TextBlock Text="{loc:Loc Settings.Language.Description}"
+                                       Foreground="#c6d0df"
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#1a2330" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,14">
+                        <StackPanel>
+                            <CheckBox x:Name="CreateWorldSpaceMusicSettingsCheckBox"
+                                       Content="{loc:Loc Main.CreateWorldSpace}"
+                                      IsChecked="False" />
+                            <TextBlock Text="{loc:Loc Main.CreateWorldSpaceDescription}"
+                                       Foreground="#c6d0df"
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#1a2330" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                        <StackPanel>
+                            <CheckBox x:Name="EnableFileLoggingCheckBox"
+                                       Content="{loc:Loc Main.EnableLogging}"
+                                      IsChecked="False" />
+                            <TextBlock Text="{loc:Loc Main.EnableLoggingDescription}"
+                                       Foreground="#c6d0df"
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#1a2330" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <TextBlock Text="{loc:Loc Main.SettingsSaveInstruction}" Foreground="#c6d0df" TextWrapping="Wrap" FontSize="11" />
+                    </Border>
+
+                    <Border Background="#1a2330" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,10,0,0">
+                        <Grid>
+                            <StackPanel Margin="0,0,150,0">
+                                <TextBlock Text="{loc:Loc Main.SavedDraft}" Foreground="{StaticResource MutedForeground}" FontSize="10" />
+                                <TextBlock x:Name="DraftStatusText"
+                                            Text="{loc:Loc Main.DraftCheckInstruction}"
+                                           Foreground="#c6d0df"
+                                           TextWrapping="Wrap"
+                                           FontSize="11"
+                                           Margin="0,4,0,0" />
+                            </StackPanel>
+                            <Button x:Name="DeleteDraftButton"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Style="{StaticResource SmallButton}"
+                                    IsEnabled="False"
+                                    Click="DeleteDraftButton_Click"
+                                     ToolTip="{loc:Loc Main.DeleteDraftTooltip}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource CloseIconGeometry}"
+                                          Fill="{StaticResource RedAccent}"
+                                          Width="14"
+                                          Height="14"
+                                          Stretch="Uniform"
+                                          Margin="0,0,6,0" />
+                                    <TextBlock Text="{loc:Loc Main.DeleteDraft}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Button Content="{loc:Loc Main.Cancel}" Style="{StaticResource MmButton}" Click="CloseSettingsButton_Click" />
+                        <Button Content="{loc:Loc Main.Save}" Style="{StaticResource PrimaryButton}" Click="SaveSettingsButton_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="ReviewOverlay" Grid.RowSpan="3" Background="#99080d14" Visibility="Collapsed">
+            <Border Width="650" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#202a38" BorderBrush="#526b8b" BorderThickness="1" CornerRadius="14" Padding="24">
+                <StackPanel>
+                    <TextBlock Text="{loc:Loc Main.ReviewHeading}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{loc:Loc Main.ReviewDescription}" Foreground="{StaticResource MutedForeground}" TextWrapping="Wrap" FontSize="12" Margin="0,5,0,18" />
+                    <TextBlock Text="{loc:Loc Main.GeneratedModName}" Foreground="{StaticResource MutedForeground}" FontSize="10" />
+                    <TextBox Text="GF Music Product" IsReadOnly="True" Style="{StaticResource TextInput}" Margin="0,4,0,10" />
+                    <TextBlock Text="{loc:Loc Main.OutputPath}" Foreground="{StaticResource MutedForeground}" FontSize="10" />
+                    <TextBox x:Name="ReviewOutputPathTextBox" Text="{loc:Loc Main.OutputPathUnset}" IsReadOnly="True" Style="{StaticResource TextInput}" Margin="0,4,0,14" />
+                    <Border Background="#1a2330" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="{loc:Loc Main.VanillaAudio}" Foreground="{StaticResource MutedForeground}" FontSize="10" />
+                            <RadioButton x:Name="KeepVanillaMusicRadioButton"
+                                         Content="{loc:Loc Main.KeepVanilla}"
+                                         Foreground="#edf2f8"
+                                         GroupName="VanillaMusicPolicy"
+                                         Margin="0,7,0,0"
+                                         Checked="VanillaMusicPolicyRadioButton_Checked" />
+                            <RadioButton x:Name="RemoveVanillaMusicRadioButton"
+                                         Content="{loc:Loc Main.RemoveVanilla}"
+                                         Foreground="#edf2f8"
+                                         GroupName="VanillaMusicPolicy"
+                                         Margin="0,5,0,0"
+                                         Checked="VanillaMusicPolicyRadioButton_Checked" />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="#1a2330" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <StackPanel>
+                            <CheckBox x:Name="EnableGeneratedPluginCheckBox" Content="{loc:Loc Main.EnableGeneratedPlugin}" IsChecked="True" />
+                            <CheckBox x:Name="DisableSourceEspCheckBox" Content="{loc:Loc Main.DisableSourceEsp}" IsChecked="True" />
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="PrerequisiteWarningBorder"
+                            Background="{StaticResource AmberPanel}"
+                            BorderBrush="#7b5a30"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12"
+                            Margin="0,10,0,0"
+                            Visibility="Collapsed">
+                        <StackPanel>
+                             <TextBlock Text="{loc:Loc Main.PrerequisiteCheck}"
+                                       Foreground="{StaticResource AmberAccent}"
+                                       FontWeight="SemiBold"
+                                       FontSize="11" />
+                            <TextBlock x:Name="PrerequisiteWarningText"
+                                       Foreground="#f0cb8d"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Grid Margin="0,15,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="ReviewSummaryText" Text="{loc:Loc Main.ReviewSummaryInitial}" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock x:Name="ReviewWarningText" Text="{loc:Loc Main.ReviewWarningInitial}" Foreground="{StaticResource AmberAccent}" FontSize="10" Margin="0,3,0,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                <TextBlock x:Name="AssignmentConflictSummaryText"
+                                            Text="{loc:Loc Main.AssignmentConflictSummaryInitial}"
+                                           Foreground="{StaticResource AmberAccent}"
+                                           FontSize="10"
+                                           VerticalAlignment="Center" />
+                                <Button x:Name="AssignmentConflictInfoButton"
+                                         Content="{loc:Loc Main.Info}"
+                                        Style="{StaticResource SmallButton}"
+                                        Padding="7,2"
+                                        Margin="8,0,0,0"
+                                        Visibility="Collapsed"
+                                        Click="AssignmentConflictInfoButton_Click"
+                                         ToolTip="{loc:Loc Main.AssignmentConflictTooltip}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="{loc:Loc Main.Back}" Style="{StaticResource MmButton}" Click="CloseReviewButton_Click" />
+                            <Button x:Name="ApplyReviewButton" Content="{loc:Loc Main.GenerateAndDeploy}" Style="{StaticResource PrimaryButton}" Click="ApplyReviewButton_Click" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
