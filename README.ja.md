@@ -118,7 +118,7 @@ ONの場合、ログは次のフォルダへ保存されます。
 
 GF Music Managerは`GPL-3.0-only`で配布します。ライセンス本文は同梱の`LICENSE.txt`を参照してください。
 
-このバイナリに対応するソースコードは、バイナリと同時に配布する`GF-Music-Manager-v0.9.0-beta.2-source.zip`から取得できます。
+このバイナリに対応するソースコードは、GitHub Releaseに自動添付される`Source code (zip)`または`Source code (tar.gz)`から取得できます。
 
 使用ライブラリと各ライセンスは、バイナリZIPの`Documentation\THIRD-PARTY-NOTICES.txt`と
 `Documentation\LICENSES`を参照してください。source ZIPでは

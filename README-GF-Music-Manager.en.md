@@ -118,7 +118,7 @@ Delete the application's folder. If the generated mod is no longer needed, disab
 
 GF Music Manager is distributed under `GPL-3.0-only`. See the bundled `LICENSE.txt` for the license text.
 
-The source code corresponding to this binary is available in `GF-Music-Manager-v0.9.0-beta.2-source.zip`, which is distributed together with the binary.
+The source code corresponding to this binary is available from the automatically generated `Source code (zip)` or `Source code (tar.gz)` archive on the GitHub Release.
 
 See `Documentation\THIRD-PARTY-NOTICES.txt` and
 `Documentation\LICENSES` in the binary ZIP for the libraries used and their respective licenses. In the source ZIP, they are included in
