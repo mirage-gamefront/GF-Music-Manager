@@ -509,8 +509,8 @@ public sealed class DfgMusicGenerationOutputWriter
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var identity = CreateTrackIdentity(entry.AssetKey, track.TrackKey);
-                var editorId = MakeUniqueEditorId(
-                    "GFMM_DFG_MUST_" + ShortHash(identity),
+                var editorId = GeneratedMusicTrackEditorId.Create(
+                    entry.Asset.VirtualPath,
                     usedEditorIds);
                 result.Add(new GeneratedTrackDescriptor(
                     identity,
@@ -523,7 +523,9 @@ public sealed class DfgMusicGenerationOutputWriter
                         "MUST",
                         packageName,
                         NormalizeVirtualPath(entry.Asset.VirtualPath),
-                        string.Empty,
+                        string.IsNullOrWhiteSpace(track.FinaleAudioPath)
+                            ? string.Empty
+                            : NormalizeVirtualPath(track.FinaleAudioPath),
                         Array.Empty<float>(),
                         0,
                         0,

@@ -600,8 +600,85 @@ public sealed class MusicSettingsAnalyzerTests
             analyzedHeroicsTrack.ResolvedAudioPaths,
             StringComparer.OrdinalIgnoreCase);
         Assert.Contains(
+            @"Music\Combat\MUS_Combat_01_Finale.wav",
+            analyzedHeroicsTrack.MatchingFinaleAudioPaths,
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(
             result.GetSettingsForAsset(workAsset.VirtualPath),
             setting => setting.MusicTypeEditorId == "ADMPMusicType");
+    }
+
+    [Fact]
+    public void Analyze_SeparatesFinaleAudioAndKeepsPrimaryFileNamedEdgeOfSilence()
+    {
+        var plugin = new PluginSource(
+            "MusicFixture.esp",
+            @"C:\Music Fixture\MusicFixture.esp",
+            "Music Fixture",
+            @"C:\Music Fixture",
+            true,
+            true,
+            10,
+            10);
+        var primaryTrack = Record(
+            "000001:MusicFixture.esp",
+            "MusicTrack",
+            "TrackEdgeOfSilence",
+            plugin,
+            assets: new[]
+            {
+                new PluginRecordAssetSource(
+                    "TrackFilename",
+                    @"Data\music\ChapterII_EdgeofSilence.xwm"),
+                new PluginRecordAssetSource(
+                    "FinaleFilename",
+                    @"Data\music\Silence.wav")
+            });
+        var finaleOnlyTrack = Record(
+            "000002:MusicFixture.esp",
+            "MusicTrack",
+            "TrackFinaleOnly",
+            plugin,
+            assets: new[]
+            {
+                new PluginRecordAssetSource(
+                    "FinaleFilename",
+                    @"Data\music\Silence.wav")
+            });
+        var musicType = Record(
+            "000003:MusicFixture.esp",
+            "MusicType",
+            "MUSFixture",
+            plugin,
+            references: new[]
+            {
+                new PluginRecordReferenceSource("Tracks", primaryTrack.FormKey),
+                new PluginRecordReferenceSource("Tracks", finaleOnlyTrack.FormKey)
+            });
+        var primaryAsset = Asset(
+            @"music\ChapterII_EdgeofSilence.xwm",
+            "Music Fixture",
+            plugin.ModPath);
+        var finaleAsset = Asset(
+            @"music\Silence.wav",
+            "Music Fixture",
+            plugin.ModPath);
+
+        var result = new MusicSettingsAnalyzer().Analyze(
+            new[] { primaryTrack, finaleOnlyTrack, musicType },
+            new[] { primaryAsset, finaleAsset });
+
+        var analyzedTrack = Assert.Single(Assert.Single(result.Settings).Tracks);
+        Assert.Equal("TrackEdgeOfSilence", analyzedTrack.EditorId);
+        Assert.Contains(
+            primaryAsset.VirtualPath,
+            analyzedTrack.MatchingAudioPaths,
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(
+            finaleAsset.VirtualPath,
+            analyzedTrack.MatchingFinaleAudioPaths,
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Empty(result.GetSettingsForAsset(finaleAsset.VirtualPath));
     }
 
     [Fact]

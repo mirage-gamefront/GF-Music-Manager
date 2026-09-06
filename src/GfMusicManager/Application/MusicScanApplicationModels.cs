@@ -97,12 +97,13 @@ public sealed record MusicScanResultDocument(
     DateTimeOffset CreatedAt,
     MusicScanResultPayload Payload)
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     private MusicScanApplicationResult? _result;
 
     [JsonIgnore]
-    public MusicScanApplicationResult Result => _result ??= Payload.ToCoreResult();
+    public MusicScanApplicationResult Result => _result ??= Payload.ToCoreResult(
+        rebuildMusicAnalysis: SchemaVersion < CurrentSchemaVersion);
 
     public static MusicScanResultDocument Create(MusicScanApplicationResult result)
     {
@@ -130,11 +131,13 @@ public sealed record MusicScanResultPayload(
             AudioDuplicateSnapshot.Create(result.AudioDuplicates));
     }
 
-    public MusicScanApplicationResult ToCoreResult()
+    public MusicScanApplicationResult ToCoreResult(bool rebuildMusicAnalysis = false)
     {
         var scan = Scan.ToCore();
         var recordsByKey = MusicScanPersistenceKeys.CreateRecordLookup(scan.Records);
-        var analysis = MusicAnalysis.ToCore(recordsByKey);
+        var analysis = rebuildMusicAnalysis
+            ? new MusicSettingsAnalyzer().Analyze(scan)
+            : MusicAnalysis.ToCore(recordsByKey);
         var duplicates = AudioDuplicates.ToCore(scan.Assets);
         return new MusicScanApplicationResult(Request, scan, analysis, duplicates);
     }
@@ -395,6 +398,12 @@ public sealed record MusicTrackSnapshot(
     IReadOnlyList<string> ResolvedAudioPaths,
     IReadOnlyList<MusicConditionSource> Conditions)
 {
+    public IReadOnlyList<string> FinaleAudioPaths { get; init; } =
+        Array.Empty<string>();
+
+    public IReadOnlyList<string> ResolvedFinaleAudioPaths { get; init; } =
+        Array.Empty<string>();
+
     public static MusicTrackSnapshot Create(MusicTrackSource track) => new(
         MusicScanPersistenceKeys.CreateTrackKey(track),
         track.FormKey,
@@ -402,7 +411,11 @@ public sealed record MusicTrackSnapshot(
         MusicScanPersistenceKeys.CreateRecordKey(track.Record),
         track.AudioPaths,
         track.ResolvedAudioPaths,
-        track.Conditions);
+        track.Conditions)
+    {
+        FinaleAudioPaths = track.FinaleAudioPaths,
+        ResolvedFinaleAudioPaths = track.ResolvedFinaleAudioPaths
+    };
 
     public MusicTrackSource ToCore(
         IReadOnlyDictionary<string, PluginRecordSource> recordsByKey)
@@ -415,6 +428,8 @@ public sealed record MusicTrackSnapshot(
         return new MusicTrackSource(FormKey, EditorId, AudioPaths, record)
         {
             ResolvedAudioPaths = ResolvedAudioPaths,
+            FinaleAudioPaths = FinaleAudioPaths,
+            ResolvedFinaleAudioPaths = ResolvedFinaleAudioPaths,
             Conditions = Conditions
         };
     }
@@ -610,7 +625,7 @@ public static class MusicScanResultJson
             throw new InvalidDataException($"Scan result is empty or invalid: {fullPath}");
         }
 
-        if (document.SchemaVersion != MusicScanResultDocument.CurrentSchemaVersion)
+        if (document.SchemaVersion is < 3 or > MusicScanResultDocument.CurrentSchemaVersion)
         {
             throw new InvalidDataException(
                 $"Unsupported scan result schema version: {document.SchemaVersion}");

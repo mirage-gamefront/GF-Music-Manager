@@ -29,6 +29,8 @@ public sealed class MainWindowStartupTests
                 };
                 var store = new GfMusicManagerSettingsStore(settingsPath);
                 window = new MainWindow(store);
+                Assert.Equal(DesktopProductInfo.WindowTitle, window.Title);
+                Assert.Equal("0.9.0-beta.2", DesktopProductInfo.Version);
                 Assert.Null(window.FindName("DfgOutputModeRadioButton"));
                 window.SettingsMo2RootTextBox.Text = string.Empty;
                 window.LanguageComboBox.SelectedValue = UiLanguage.English;

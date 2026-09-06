@@ -18,6 +18,68 @@ namespace GfMusicManager.Core.Tests;
 public sealed class MusicGenerationOutputWriterTests
 {
     [Fact]
+    public void Generate_WritesFinaleFilenameOnPrimaryTrackWithoutStandaloneFinaleTrack()
+    {
+        var root = Directory.CreateTempSubdirectory("gf-music-generation-finale-");
+        try
+        {
+            var mainPath = Path.Combine(root.FullName, "Music Mod", "music", "main.xwm");
+            var finalePath = Path.Combine(root.FullName, "Music Mod", "music", "Silence.wav");
+            Directory.CreateDirectory(Path.GetDirectoryName(mainPath)!);
+            File.WriteAllBytes(mainPath, [1, 2, 3, 4]);
+            File.WriteAllBytes(finalePath, [5, 6, 7]);
+            var mainAsset = CreateLooseAsset(
+                root.FullName,
+                "Music Mod",
+                mainPath,
+                @"music\main.xwm");
+            var finaleAsset = CreateLooseAsset(
+                root.FullName,
+                "Music Mod",
+                finalePath,
+                @"music\Silence.wav");
+            var setting = CreateMusicTypeSetting(root.FullName, "MUSExploreFixture");
+            var plan = new MusicGenerationPlan { KeepVanillaMusic = false };
+            plan.GetOrCreatePrepared(
+                mainAsset,
+                new[] { setting },
+                new[]
+                {
+                    new MusicGenerationTrackPlan(
+                        "track-with-finale",
+                        finaleAudioPath: finaleAsset.VirtualPath,
+                        finaleAsset: finaleAsset)
+                });
+
+            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
+            var result = new MusicGenerationOutputWriter().Generate(
+                plan,
+                new[] { setting },
+                new MusicGenerationOutputOptions { OutputModDirectory = outputDirectory });
+
+            Assert.True(result.Diagnostic.IsSuccess, result.Diagnostic.Details);
+            var outputTrack = Assert.Single(result.Tracks);
+            Assert.Equal(finaleAsset.VirtualPath, outputTrack.FinaleVirtualPath);
+            Assert.Equal(2, result.Assets.Count);
+            Assert.True(File.Exists(Path.Combine(outputDirectory, @"music\main.xwm")));
+            Assert.True(File.Exists(Path.Combine(outputDirectory, @"music\Silence.wav")));
+
+            using var generatedPlugin = SkyrimMod.CreateFromBinaryOverlay(
+                new ModPath(
+                    ModKey.FromNameAndExtension("GF Music Product.esp"),
+                    Path.Combine(outputDirectory, "GF Music Product.esp")),
+                SkyrimRelease.SkyrimSE);
+            var generatedTrack = Assert.Single(generatedPlugin.MusicTracks.Records);
+            Assert.Equal(@"music\main.xwm", generatedTrack.TrackFilename?.GivenPath);
+            Assert.Equal(@"music\Silence.wav", generatedTrack.FinaleFilename?.GivenPath);
+        }
+        finally
+        {
+            DeleteDirectory(root.FullName);
+        }
+    }
+
+    [Fact]
     public void Generate_WritesOneGeneratedTrackPerSourceTrackAndPersistsTrackConditions()
     {
         var root = Directory.CreateTempSubdirectory("gf-music-generation-multiple-tracks-");
@@ -77,6 +139,11 @@ public sealed class MusicGenerationOutputWriterTests
                     Path.Combine(outputDirectory, "GF Music Product.esp")),
                 SkyrimRelease.SkyrimSE);
             Assert.Equal(2, generatedPlugin.MusicTracks.Records.Count());
+            Assert.Equal(
+                new[] { "fixture", "fixture_2" },
+                generatedPlugin.MusicTracks.Records
+                    .Select(track => track.EditorID)
+                    .Order(StringComparer.OrdinalIgnoreCase));
 
             var manifest = File.ReadAllText(result.ManifestPath, Encoding.UTF8);
             Assert.Contains("TrackKey", manifest, StringComparison.Ordinal);
@@ -146,6 +213,7 @@ public sealed class MusicGenerationOutputWriterTests
                 SkyrimRelease.SkyrimSE);
             Assert.True(generatedPlugin.ModHeader.Flags.HasFlag(SkyrimModHeader.HeaderFlag.Small));
             var generatedTrack = Assert.Single(generatedPlugin.MusicTracks.Records);
+            Assert.Equal("fixture", generatedTrack.EditorID);
             Assert.Equal(trackOutput.FormKey, generatedTrack.FormKey.ToString());
             Assert.Equal(MusicTrack.TypeEnum.SingleTrack, generatedTrack.Type);
             Assert.Single(generatedTrack.Conditions!);

@@ -103,6 +103,7 @@ public partial class MainWindow : Window
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         GfMusicManagerLog.Info("MainWindow constructor: begin.");
         InitializeComponent();
+        Title = DesktopProductInfo.WindowTitle;
         Loaded += MainWindow_Loaded;
         ContentRendered += MainWindow_ContentRendered;
 

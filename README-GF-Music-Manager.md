@@ -4,9 +4,9 @@
 
 ## ダウンロード
 
-[GF Music Manager v0.9.0-beta.1をダウンロード](https://github.com/mirage-gamefront/GF-Music-Manager/releases/tag/v0.9.0-beta.1)
+[GF Music Manager v0.9.0-beta.2をダウンロード](https://github.com/mirage-gamefront/GF-Music-Manager/releases/tag/v0.9.0-beta.2)
 
-Version: `0.9.0-beta.1`
+Version: `0.9.0-beta.2`
 
 GF Music Managerは、Mod Organizer 2（MO2）に導入されたSkyrim Special Edition / Anniversary Edition向け音楽MODを解析し、採用する曲と適用先を整理して、管理用MOD `GF Music Product` を生成するWindowsアプリです。
 
@@ -118,7 +118,7 @@ ONの場合、ログは次のフォルダへ保存されます。
 
 GF Music Managerは`GPL-3.0-only`で配布します。ライセンス本文は同梱の`LICENSE.txt`を参照してください。
 
-このバイナリに対応するソースコードは、バイナリと同時に配布する`GF-Music-Manager-v0.9.0-beta.1-source.zip`から取得できます。
+このバイナリに対応するソースコードは、バイナリと同時に配布する`GF-Music-Manager-v0.9.0-beta.2-source.zip`から取得できます。
 
 使用ライブラリと各ライセンスは、バイナリZIPの`Documentation\THIRD-PARTY-NOTICES.txt`と
 `Documentation\LICENSES`を参照してください。source ZIPでは

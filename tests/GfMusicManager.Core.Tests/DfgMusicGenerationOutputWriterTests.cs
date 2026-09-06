@@ -25,6 +25,7 @@ public sealed class DfgMusicGenerationOutputWriterTests
                 "Track_Morning",
                 asset.VirtualPath) with
             {
+                FinaleAudioPaths = new[] { @"music\Silence.wav" },
                 Conditions = new[]
                 {
                     MusicConditionSource.CreateCurrentTime(8f, "GreaterThanOrEqualTo")
@@ -71,11 +72,14 @@ public sealed class DfgMusicGenerationOutputWriterTests
             var generatedTrackId = trackDocument.RootElement
                 .GetProperty("editorId")
                 .GetString();
-            Assert.StartsWith("GFMM_DFG_MUST_", generatedTrackId, StringComparison.Ordinal);
+            Assert.Equal("fixture", generatedTrackId);
             Assert.Equal(1, trackDocument.RootElement.GetProperty("schemaVersion").GetInt32());
             Assert.Equal(
                 "music/fixture.xwm",
                 trackDocument.RootElement.GetProperty("musicTrackPath").GetString());
+            Assert.Equal(
+                "music/Silence.wav",
+                trackDocument.RootElement.GetProperty("musicTrackFinalePath").GetString());
             var condition = Assert.Single(
                 trackDocument.RootElement.GetProperty("conditions").EnumerateArray());
             Assert.Equal(18, condition.GetProperty("functionId").GetInt32());

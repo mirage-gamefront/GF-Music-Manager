@@ -572,7 +572,27 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                 continue;
             }
 
-            check($"Music Track {expected.FormKey}: record and audio path match");
+            var finaleAsset = record.Assets.FirstOrDefault(asset =>
+                asset.FieldName.Equals("FinaleFilename", StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(expected.FinaleVirtualPath))
+            {
+                if (finaleAsset is not null && !string.IsNullOrWhiteSpace(finaleAsset.VirtualPath))
+                {
+                    error($"Music Track {expected.FormKey}: unexpected FinaleFilename was generated");
+                    continue;
+                }
+            }
+            else if (finaleAsset is null ||
+                     !NormalizeVirtualPath(finaleAsset.VirtualPath).Equals(
+                         NormalizeVirtualPath(expected.FinaleVirtualPath),
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                error(
+                    $"Music Track {expected.FormKey}: FinaleFilename does not match {expected.FinaleVirtualPath}");
+                continue;
+            }
+
+            check($"Music Track {expected.FormKey}: record and audio paths match");
 
             var expectedConditionKeys = expected.Conditions
                 .Select(MusicConditionFormatter.CreateRecordKey)
@@ -1347,7 +1367,11 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             // One plan entry belongs to one audio source.  A source may now
             // produce several Music Track records, so the Track count is not
             // the expected PlanEntries count.
-            ValidateManifestMinimumArrayCount(root, "PlanEntries", assets.Count, error);
+            var primaryAssetCount = tracks
+                .Select(track => track.AssetKey)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            ValidateManifestMinimumArrayCount(root, "PlanEntries", primaryAssetCount, error);
             ValidateManifestInt(root, "NewRecordCount", expectedNewRecordCount, error);
             ValidateManifestInt(root, "MaxNewRecordsPerPlugin", maxNewRecordsPerPlugin, error);
             check("manifest: schema and generated counts match");

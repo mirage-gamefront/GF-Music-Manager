@@ -1,4 +1,5 @@
 using GfMusicManager.Core.Analysis;
+using SkyrimScan.Core.Models;
 
 namespace GfMusicManager.Core.Planning;
 
@@ -48,7 +49,9 @@ public sealed class MusicAssetBinding
         return _trackTemplates
             .Select(template => new MusicGenerationTrackPlan(
                 template.TrackKey,
-                template.Conditions))
+                template.Conditions,
+                template.FinaleAudioPath,
+                template.FinaleAsset))
             .ToArray();
     }
 }
@@ -70,7 +73,9 @@ public sealed class MusicAssetBindingIndex
         _bindings = bindings;
     }
 
-    public static MusicAssetBindingIndex Create(MusicAnalysisResult analysis)
+    public static MusicAssetBindingIndex Create(
+        MusicAnalysisResult analysis,
+        IReadOnlyList<AssetSource>? assets = null)
     {
         ArgumentNullException.ThrowIfNull(analysis);
 
@@ -98,9 +103,9 @@ public sealed class MusicAssetBindingIndex
                 .ToArray();
             var trackTemplates = matchedTrackInfo
                 .GroupBy(info => info.TrackKey, StringComparer.OrdinalIgnoreCase)
-                .Select(group => new MusicGenerationTrackPlan(
-                    group.Key,
-                    group.First().Track.Conditions))
+                .Select(group => MusicGenerationTrackPlanFactory.Create(
+                    group.First().Track,
+                    assets))
                 .OrderBy(track => track.TrackKey, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             var definitionConflicts = ResolveDefinitionConflicts(

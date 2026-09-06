@@ -230,8 +230,19 @@ public sealed record MusicTrackSource(
     public IReadOnlyList<string> ResolvedAudioPaths { get; init; } =
         Array.Empty<string>();
 
+    public IReadOnlyList<string> FinaleAudioPaths { get; init; } =
+        Array.Empty<string>();
+
+    public IReadOnlyList<string> ResolvedFinaleAudioPaths { get; init; } =
+        Array.Empty<string>();
+
     public IReadOnlyList<string> MatchingAudioPaths => AudioPaths
         .Concat(ResolvedAudioPaths)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    public IReadOnlyList<string> MatchingFinaleAudioPaths => FinaleAudioPaths
+        .Concat(ResolvedFinaleAudioPaths)
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToArray();
 

@@ -85,6 +85,8 @@ public sealed record GeneratedMusicTrackOutput(
     IReadOnlyList<MusicConditionSource> Conditions)
 {
     public string TrackKey { get; init; } = string.Empty;
+
+    public string? FinaleVirtualPath { get; init; }
 }
 
 public sealed record GeneratedWorldSpaceOutput(
@@ -278,6 +280,18 @@ public sealed class MusicGenerationOutputWriter
             var trackOutputs = new List<GeneratedMusicTrackOutput>(
                 adoptedEntries.Sum(entry => Math.Max(entry.Tracks.Count, 1)));
             var assetOutputs = new List<GeneratedAssetOutput>(adoptedEntries.Length);
+            var outputAssetKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddAssetOutput(AssetSource source)
+            {
+                var sourceKey = MusicGenerationPlanEntry.CreateAssetKey(source);
+                if (outputAssetKeys.Add(sourceKey))
+                {
+                    assetOutputs.Add(CopyAsset(
+                        source,
+                        stageDirectory,
+                        cancellationToken));
+                }
+            }
             var generatedTracks = new Dictionary<string, IReadOnlyList<IMusicTrack>>(
                 StringComparer.OrdinalIgnoreCase);
             var entryByAssetKey = adoptedEntries.ToDictionary(
@@ -285,8 +299,6 @@ public sealed class MusicGenerationOutputWriter
                 StringComparer.OrdinalIgnoreCase);
             var processedAssetKeys = new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
-            var trackOrdinal = 1;
-
             if (!dfgMode)
             {
                 foreach (var pluginEstimate in capacity.Plugins)
@@ -304,8 +316,8 @@ public sealed class MusicGenerationOutputWriter
                             var track = AddMusicTrack(
                                 context.Mod,
                                 asset,
-                                trackPlan.Conditions,
-                                trackOrdinal++);
+                                trackPlan,
+                                context.UsedMusicTrackEditorIds);
                             generatedForAsset.Add(track);
                             trackOutputs.Add(new GeneratedMusicTrackOutput(
                                 assetKey,
@@ -318,15 +330,17 @@ public sealed class MusicGenerationOutputWriter
                                     .ToArray(),
                                 trackPlan.Conditions)
                             {
-                                TrackKey = trackPlan.TrackKey
+                                TrackKey = trackPlan.TrackKey,
+                                FinaleVirtualPath = trackPlan.FinaleAudioPath
                             });
+                            if (trackPlan.FinaleAsset is not null)
+                            {
+                                AddAssetOutput(trackPlan.FinaleAsset);
+                            }
                         }
 
                         generatedTracks.Add(assetKey, generatedForAsset);
-                        assetOutputs.Add(CopyAsset(
-                            asset,
-                            stageDirectory,
-                            cancellationToken));
+                        AddAssetOutput(asset);
                     }
                 }
             }
@@ -341,10 +355,14 @@ public sealed class MusicGenerationOutputWriter
                          !processedAssetKeys.Contains(entry.AssetKey)))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                assetOutputs.Add(CopyAsset(
-                    entry.Asset!,
-                    stageDirectory,
-                    cancellationToken));
+                AddAssetOutput(entry.Asset!);
+                foreach (var finaleAsset in entry.Tracks
+                             .Select(track => track.FinaleAsset)
+                             .Where(asset => asset is not null)
+                             .Cast<AssetSource>())
+                {
+                    AddAssetOutput(finaleAsset);
+                }
             }
 
             var primaryPlugin = pluginContexts.FirstOrDefault();
@@ -1007,12 +1025,12 @@ public sealed class MusicGenerationOutputWriter
     private static IMusicTrack AddMusicTrack(
         SkyrimMod mod,
         AssetSource asset,
-        IReadOnlyList<MusicConditionSource> conditions,
-        int ordinal)
+        MusicGenerationTrackPlan trackPlan,
+        ISet<string> usedEditorIds)
     {
-        var editorId = BuildGeneratedEditorId(
-            $"MusicTrack_{ordinal:0000}",
-            Path.GetFileNameWithoutExtension(asset.VirtualPath));
+        var editorId = GeneratedMusicTrackEditorId.Create(
+            asset.VirtualPath,
+            usedEditorIds);
         var track = mod.MusicTracks.AddNew(editorId);
         track.Type = MusicTrack.TypeEnum.SingleTrack;
         track.TrackFilename = new();
@@ -1022,12 +1040,23 @@ public sealed class MusicGenerationOutputWriter
                 $"音源パスをMusic Trackへ設定できません：{asset.VirtualPath}");
         }
 
+        if (!string.IsNullOrWhiteSpace(trackPlan.FinaleAudioPath))
+        {
+            track.FinaleFilename = new();
+            if (!track.FinaleFilename.TrySetPath(
+                    NormalizeVirtualPath(trackPlan.FinaleAudioPath)))
+            {
+                throw new MusicGenerationOutputException(
+                    $"フィナーレ音源パスをMusic Trackへ設定できません：{trackPlan.FinaleAudioPath}");
+            }
+        }
+
         // Generated tracks are rebuilt from the adopted audio and conditions.
         // Do not carry source cue points into the generated record; this also
         // repairs AMP's combat-track cue-point issue without editing the source.
         track.CuePoints = new();
         track.Conditions = new();
-        foreach (var condition in conditions)
+        foreach (var condition in trackPlan.Conditions)
         {
             track.Conditions.Add(CreateCondition(condition));
         }
@@ -1786,6 +1815,8 @@ public sealed class MusicGenerationOutputWriter
 
         public string PluginFileName { get; }
         public SkyrimMod Mod { get; }
+        public ISet<string> UsedMusicTrackEditorIds { get; } =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
     private sealed record WorldSpaceTarget(

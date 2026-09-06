@@ -221,6 +221,89 @@ public sealed class MusicScanApplicationTests
     }
 
     [Fact]
+    public void PlanService_ExcludesFinaleOnlyAssetAndBindsItToPrimaryTrack()
+    {
+        var mainAsset = new AssetSource(
+            @"music\main.xwm",
+            AssetSourceKind.Loose,
+            "Fixture Mod",
+            @"C:\Fixture",
+            true,
+            @"C:\Fixture\music\main.xwm",
+            null,
+            10);
+        var finaleAsset = mainAsset with
+        {
+            VirtualPath = @"music\Silence.wav",
+            SourcePath = @"C:\Fixture\music\Silence.wav"
+        };
+        var plugin = new PluginSource(
+            "Fixture.esp",
+            @"C:\Fixture\Fixture.esp",
+            "Fixture Mod",
+            @"C:\Fixture",
+            true,
+            true,
+            1,
+            1);
+        var trackRecord = new PluginRecordSource(
+            "000001:Fixture.esp",
+            "MusicTrack",
+            "FixtureTrack",
+            false,
+            plugin,
+            true);
+        var musicTypeRecord = new PluginRecordSource(
+            "000002:Fixture.esp",
+            "MusicType",
+            "MUSFixture",
+            false,
+            plugin,
+            true);
+        var track = new MusicTrackSource(
+            trackRecord.FormKey,
+            trackRecord.EditorId,
+            new[] { mainAsset.VirtualPath },
+            trackRecord)
+        {
+            FinaleAudioPaths = new[] { finaleAsset.VirtualPath }
+        };
+        var setting = new MusicSettingSource(
+            MusicSettingScope.MusicType,
+            musicTypeRecord.FormKey,
+            musicTypeRecord.EditorId,
+            musicTypeRecord.FormKey,
+            musicTypeRecord.EditorId,
+            musicTypeRecord,
+            musicTypeRecord,
+            new[] { track });
+        var analysis = new MusicAnalysisResult(
+            new[] { setting },
+            new Dictionary<string, IReadOnlyList<MusicSettingSource>>(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                [mainAsset.VirtualPath] = new[] { setting }
+            },
+            Array.Empty<ScanIssue>());
+        var scan = CreateEmptyResult() with
+        {
+            Scan = CreateEmptyResult().Scan with
+            {
+                Assets = new[] { mainAsset, finaleAsset }
+            },
+            MusicAnalysis = analysis
+        };
+
+        var prepared = new MusicPlanApplicationService().PreparePlan(scan);
+
+        var entry = Assert.Single(prepared.Plan.Entries);
+        Assert.Equal(mainAsset.VirtualPath, entry.Asset?.VirtualPath);
+        var plannedTrack = Assert.Single(entry.Tracks);
+        Assert.Equal(finaleAsset.VirtualPath, plannedTrack.FinaleAudioPath);
+        Assert.Equal(finaleAsset.VirtualPath, plannedTrack.FinaleAsset?.VirtualPath);
+    }
+
+    [Fact]
     public void PlanJson_RoundTripsMultiTrackSnapshot()
     {
         var asset = new AssetSource(

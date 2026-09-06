@@ -13,7 +13,9 @@ public sealed class MusicGenerationTrackPlan
 
     public MusicGenerationTrackPlan(
         string trackKey,
-        IEnumerable<MusicConditionSource>? conditions = null)
+        IEnumerable<MusicConditionSource>? conditions = null,
+        string? finaleAudioPath = null,
+        AssetSource? finaleAsset = null)
     {
         if (string.IsNullOrWhiteSpace(trackKey))
         {
@@ -22,11 +24,19 @@ public sealed class MusicGenerationTrackPlan
 
         TrackKey = trackKey;
         _conditions = CreateConditions(conditions);
+        FinaleAudioPath = string.IsNullOrWhiteSpace(finaleAudioPath)
+            ? null
+            : MusicAudioPathIdentity.NormalizeAssetPath(finaleAudioPath);
+        FinaleAsset = finaleAsset;
     }
 
     public string TrackKey { get; }
 
     public IReadOnlyList<MusicConditionSource> Conditions => _conditions;
+
+    public string? FinaleAudioPath { get; }
+
+    public AssetSource? FinaleAsset { get; }
 
     public void ReplaceConditions(IEnumerable<MusicConditionSource> conditions)
     {
@@ -64,6 +74,7 @@ public static class MusicGenerationTrackKey
         }
 
         var audioPaths = track.MatchingAudioPaths
+            .Concat(track.MatchingFinaleAudioPaths)
             .Order(StringComparer.OrdinalIgnoreCase);
         var conditions = track.Conditions
             .Select(MusicConditionFormatter.CreateKey)
@@ -82,6 +93,34 @@ public static class MusicGenerationTrackKey
 
 public static class MusicGenerationTrackPlanFactory
 {
+    public static MusicGenerationTrackPlan Create(
+        MusicTrackSource track,
+        IReadOnlyList<AssetSource>? assets = null)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        var finaleCandidates = track.ResolvedFinaleAudioPaths
+            .Concat(track.FinaleAudioPaths)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var finaleAsset = finaleCandidates
+            .SelectMany(path => (assets ?? Array.Empty<AssetSource>())
+                .Where(asset => string.Equals(
+                    MusicAudioPathIdentity.NormalizeMusicIdentity(asset.VirtualPath),
+                    MusicAudioPathIdentity.NormalizeMusicIdentity(path),
+                    StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(asset => asset.ModName.Equals(
+                track.Record.Plugin.ModName,
+                StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(asset => asset.IsVfsWinner && asset.ModEnabled)
+            .FirstOrDefault();
+        var finalePath = finaleAsset?.VirtualPath ?? finaleCandidates.FirstOrDefault();
+        return new MusicGenerationTrackPlan(
+            MusicGenerationTrackKey.Create(track),
+            track.Conditions,
+            finalePath,
+            finaleAsset);
+    }
+
     public static IReadOnlyList<MusicGenerationTrackPlan> Create(
         AssetSource asset,
         IEnumerable<MusicSettingSource> settings,
@@ -94,9 +133,7 @@ public static class MusicGenerationTrackPlanFactory
             .SelectMany(setting => setting.Tracks)
             .Where(track => track.MatchesAudioPath(asset.VirtualPath))
             .GroupBy(MusicGenerationTrackKey.Create, StringComparer.OrdinalIgnoreCase)
-            .Select(group => new MusicGenerationTrackPlan(
-                group.Key,
-                group.First().Conditions))
+            .Select(group => Create(group.First()))
             .OrderBy(track => track.TrackKey, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -125,9 +162,7 @@ public static class MusicGenerationTrackPlanFactory
         var tracks = settings
             .SelectMany(setting => setting.Tracks)
             .GroupBy(MusicGenerationTrackKey.Create, StringComparer.OrdinalIgnoreCase)
-            .Select(group => new MusicGenerationTrackPlan(
-                group.Key,
-                group.First().Conditions))
+            .Select(group => Create(group.First()))
             .OrderBy(track => track.TrackKey, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 

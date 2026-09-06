@@ -377,11 +377,20 @@ public sealed class MusicSettingsAnalyzer
             }
 
             var audioPaths = trackRecord.Assets
-                .Where(asset => asset.FieldName is "TrackFilename" or "FinaleFilename")
+                .Where(asset => asset.FieldName == "TrackFilename")
                 .Select(asset => NormalizeAssetPath(asset.VirtualPath))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             var resolvedAudioPaths = audioPaths
+                .SelectMany(audioPathRepairResolver.Resolve)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var finaleAudioPaths = trackRecord.Assets
+                .Where(asset => asset.FieldName == "FinaleFilename")
+                .Select(asset => NormalizeAssetPath(asset.VirtualPath))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var resolvedFinaleAudioPaths = finaleAudioPaths
                 .SelectMany(audioPathRepairResolver.Resolve)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -412,6 +421,8 @@ public sealed class MusicSettingsAnalyzer
                     trackRecord)
                 {
                     ResolvedAudioPaths = resolvedAudioPaths,
+                    FinaleAudioPaths = finaleAudioPaths,
+                    ResolvedFinaleAudioPaths = resolvedFinaleAudioPaths,
                     Conditions = trackRecord.Conditions
                         .Select(condition => MusicConditionSource.From(condition, recordsByFormKey))
                         .ToArray()

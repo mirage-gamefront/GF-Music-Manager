@@ -1,5 +1,5 @@
 GF Music Manager - Third-Party Notices
-Release: 0.9.0-beta.1
+Release: 0.9.0-beta.2
 Copyright (C) 2026 Mirage
 
 GF Music Manager incorporates or redistributes the packages listed below.

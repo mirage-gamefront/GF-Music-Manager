@@ -174,7 +174,7 @@ public sealed class MusicGenerationPlanEntry
         IsAdopted = isAdopted;
         _destinationKeys = CreateKeys(initialDestinations);
         _tracks = initialTracks
-            .Select(track => new MusicGenerationTrackPlan(track.TrackKey, track.Conditions))
+            .Select(CloneTrackPlan)
             .ToArray();
     }
 
@@ -289,30 +289,46 @@ public sealed class MusicGenerationPlanEntry
         var incomingByKey = incoming.ToDictionary(
             track => track.TrackKey,
             StringComparer.OrdinalIgnoreCase);
-        var merged = new List<MusicGenerationTrackPlan>(_tracks.Count + incoming.Length);
-        var existingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var existing in _tracks)
         {
             if (incomingByKey.TryGetValue(existing.TrackKey, out var replacement))
             {
                 existing.ReplaceConditions(replacement.Conditions);
             }
-
-            merged.Add(existing);
-            existingKeys.Add(existing.TrackKey);
         }
 
-        foreach (var replacement in incoming)
+        var existingKeys = _tracks
+            .Select(track => track.TrackKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _tracks = _tracks
+            .Concat(incoming
+                .Where(replacement => !existingKeys.Contains(replacement.TrackKey))
+                .Select(CloneTrackPlan))
+            .ToArray();
+    }
+
+    public int ApplyExistingTrackConditions(IEnumerable<MusicGenerationTrackPlan> trackPlans)
+    {
+        ArgumentNullException.ThrowIfNull(trackPlans);
+        var incomingByKey = trackPlans
+            .GroupBy(track => track.TrackKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Last(),
+                StringComparer.OrdinalIgnoreCase);
+        var applied = 0;
+        foreach (var existing in _tracks)
         {
-            if (!existingKeys.Contains(replacement.TrackKey))
+            if (!incomingByKey.TryGetValue(existing.TrackKey, out var replacement))
             {
-                merged.Add(new MusicGenerationTrackPlan(
-                    replacement.TrackKey,
-                    replacement.Conditions));
+                continue;
             }
+
+            existing.ReplaceConditions(replacement.Conditions);
+            applied++;
         }
 
-        _tracks = merged;
+        return applied;
     }
 
     public void ReplaceTrackPlans(IEnumerable<MusicGenerationTrackPlan> trackPlans)
@@ -322,10 +338,19 @@ public sealed class MusicGenerationPlanEntry
             .GroupBy(track => track.TrackKey, StringComparer.OrdinalIgnoreCase)
             .Select(group => new MusicGenerationTrackPlan(
                 group.Key,
-                group.Last().Conditions))
+                group.Last().Conditions,
+                group.Last().FinaleAudioPath,
+                group.Last().FinaleAsset))
             .ToArray();
         _tracks = normalized;
     }
+
+    private static MusicGenerationTrackPlan CloneTrackPlan(MusicGenerationTrackPlan track) =>
+        new(
+            track.TrackKey,
+            track.Conditions,
+            track.FinaleAudioPath,
+            track.FinaleAsset);
 
     public static string CreateAssetKey(AssetSource asset)
     {

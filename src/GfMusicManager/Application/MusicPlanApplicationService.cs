@@ -93,8 +93,13 @@ public sealed class MusicPlanApplicationService
     {
         ArgumentNullException.ThrowIfNull(scanResult);
 
-        var bindings = MusicAssetBindingIndex.Create(scanResult.MusicAnalysis);
-        var plan = CreatePlan(scanResult.Scan.Assets, bindings, progress);
+        var visibleAssets = SelectPrimaryAssets(
+            scanResult.Scan.Assets,
+            scanResult.MusicAnalysis);
+        var bindings = MusicAssetBindingIndex.Create(
+            scanResult.MusicAnalysis,
+            scanResult.Scan.Assets);
+        var plan = CreatePlan(visibleAssets, bindings, progress);
         return new MusicPlanPreparationResult(plan, bindings);
     }
 
@@ -150,10 +155,36 @@ public sealed class MusicPlanApplicationService
         ArgumentNullException.ThrowIfNull(assets);
         ArgumentNullException.ThrowIfNull(musicAnalysis);
 
+        var visibleAssets = SelectPrimaryAssets(assets, musicAnalysis);
+
         return CreatePlan(
-            assets,
-            MusicAssetBindingIndex.Create(musicAnalysis),
+            visibleAssets,
+            MusicAssetBindingIndex.Create(musicAnalysis, assets),
             progress);
+    }
+
+    private static IReadOnlyList<AssetSource> SelectPrimaryAssets(
+        IReadOnlyList<AssetSource> assets,
+        MusicAnalysisResult musicAnalysis)
+    {
+        var primaryAudioIdentities = musicAnalysis.Settings
+            .SelectMany(setting => setting.Tracks)
+            .SelectMany(track => track.MatchingAudioPaths)
+            .Select(MusicAudioPathIdentity.NormalizeMusicIdentity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var finaleAudioIdentities = musicAnalysis.Settings
+            .SelectMany(setting => setting.Tracks)
+            .SelectMany(track => track.MatchingFinaleAudioPaths)
+            .Select(MusicAudioPathIdentity.NormalizeMusicIdentity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return assets
+            .Where(asset =>
+            {
+                var identity = MusicAudioPathIdentity.NormalizeMusicIdentity(asset.VirtualPath);
+                return !finaleAudioIdentities.Contains(identity) ||
+                       primaryAudioIdentities.Contains(identity);
+            })
+            .ToArray();
     }
 
     private static MusicGenerationPlan CreatePlan(
@@ -266,8 +297,13 @@ public sealed class MusicPlanApplicationService
             var savedTracks = savedEntry.Tracks ?? Array.Empty<MusicPlanTrackSnapshot>();
             if (savedTracks.Count > 0)
             {
-                entry.ReplaceTrackPlans(savedTracks.Select(track =>
-                    new MusicGenerationTrackPlan(track.TrackKey, track.Conditions)));
+                var restoredTracks = savedTracks.Select(track =>
+                        new MusicGenerationTrackPlan(track.TrackKey, track.Conditions))
+                    .ToArray();
+                if (entry.ApplyExistingTrackConditions(restoredTracks) == 0)
+                {
+                    entry.ReplaceTrackPlans(restoredTracks);
+                }
             }
             else if (savedEntry.LegacyConditions is { Count: > 0 } &&
                      entry.Tracks.Count == 1)
