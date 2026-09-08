@@ -470,15 +470,6 @@ try {
         -DestinationPath $sourceZipPath `
         -RootDirectoryName 'GF Music Manager Source'
 
-    $checksumLines = Get-ChildItem -LiteralPath $releaseDirectory -Filter '*-win-x64-*.zip' -File |
-        Sort-Object Name |
-        ForEach-Object {
-            $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
-            "$($hash.Hash.ToLowerInvariant())  $($_.Name)"
-        }
-    $checksumPath = Join-Path $releaseDirectory 'SHA256SUMS.txt'
-    Set-Content -LiteralPath $checksumPath -Value $checksumLines -Encoding Ascii
-
     Write-Host "GF Music Manager release packages created:"
     Get-ChildItem -LiteralPath $releaseDirectory -File |
         Sort-Object Name |
