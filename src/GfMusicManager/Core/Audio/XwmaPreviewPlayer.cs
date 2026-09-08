@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using GfMusicManager.Core.Diagnostics;
+using GfMusicManager.Core.Localization;
 using SkyrimScan.Core.Archives;
 using SkyrimScan.Core.Models;
 using Vortice.Multimedia;
@@ -79,12 +80,10 @@ public sealed class XwmaPreviewPlayer : IDisposable
         if (!extension.Equals(".xwm", StringComparison.OrdinalIgnoreCase))
         {
             var displayExtension = string.IsNullOrWhiteSpace(extension)
-                ? "不明な形式"
+                ? UiText.Get("Preview.UnknownFormat")
                 : extension.TrimStart('.').ToUpperInvariant();
             throw new NotSupportedException(
-                $"{displayExtension}形式は現在の試聴に対応していません。\n" +
-                "試聴できる形式はXWMのみです。\n" +
-                $"対象形式：{displayExtension}");
+                UiText.Format("Preview.UnsupportedFormat", displayExtension));
         }
 
         var file = XwmaFile.Read(ReadAsset(asset));
@@ -300,7 +299,8 @@ public sealed class XwmaPreviewPlayer : IDisposable
         {
             if (string.IsNullOrWhiteSpace(asset.ArchiveEntryPath))
             {
-                throw new InvalidDataException("BSA音源にアーカイブ内パスがありません。");
+                throw new InvalidDataException(
+                    UiText.Get("Preview.BsaEntryPathMissing"));
             }
 
             return _archiveReader.ReadEntry(asset.SourcePath, asset.ArchiveEntryPath);
@@ -308,7 +308,9 @@ public sealed class XwmaPreviewPlayer : IDisposable
 
         if (!File.Exists(asset.SourcePath))
         {
-            throw new FileNotFoundException("音源ファイルが見つかりません。", asset.SourcePath);
+            throw new FileNotFoundException(
+                UiText.Get("Preview.SourceFileMissing"),
+                asset.SourcePath);
         }
 
         return File.ReadAllBytes(asset.SourcePath);
@@ -336,13 +338,17 @@ public sealed class XwmaPreviewPlayer : IDisposable
         // public interface still exposes the native overload, so invoke that
         // overload while retaining the exact native packet-table layout.
         var wmaType = typeof(IXAudio2SourceVoice).Assembly.GetType("Vortice.XAudio2.BufferWma")
-            ?? throw new InvalidOperationException("Vortice.XAudio2.BufferWmaが見つかりません。");
+            ?? throw new InvalidOperationException(
+                UiText.Get("Preview.BufferWmaTypeMissing"));
         var wma = Activator.CreateInstance(wmaType)
-            ?? throw new InvalidOperationException("BufferWmaを作成できません。");
+            ?? throw new InvalidOperationException(
+                UiText.Get("Preview.BufferWmaCreationFailed"));
         var decodedBytesField = wmaType.GetField("DecodedPacketCumulativeBytesPointer")
-            ?? throw new InvalidOperationException("BufferWmaのパケットテーブル項目が見つかりません。");
+            ?? throw new InvalidOperationException(
+                UiText.Get("Preview.BufferWmaPacketTableMissing"));
         var packetCountField = wmaType.GetField("PacketCount")
-            ?? throw new InvalidOperationException("BufferWmaのパケット数項目が見つかりません。");
+            ?? throw new InvalidOperationException(
+                UiText.Get("Preview.BufferWmaPacketCountMissing"));
         decodedBytesField.SetValue(wma, packetTablePointer);
         packetCountField.SetValue(wma, Convert.ChangeType(packetCount, packetCountField.FieldType));
 
@@ -375,7 +381,8 @@ public sealed class XwmaPreviewPlayer : IDisposable
             ?? resultType.GetField("Failure")?.GetValue(result);
         if (failure is bool isFailure && isFailure)
         {
-            throw new InvalidOperationException($"{operation}に失敗しました: {result}");
+            throw new InvalidOperationException(
+                UiText.Format("Preview.OperationFailed", operation, result));
         }
     }
 
@@ -419,7 +426,8 @@ public sealed class XwmaPreviewPlayer : IDisposable
         {
             if (bytes.Length < 12 || FourCc(bytes, 0) != "RIFF" || FourCc(bytes, 8) != "XWMA")
             {
-                throw new InvalidDataException("RIFF/XWMA音源ではありません。");
+                throw new InvalidDataException(
+                    UiText.Get("Preview.NotXwma"));
             }
 
             byte[]? formatBytes = null;
@@ -434,7 +442,9 @@ public sealed class XwmaPreviewPlayer : IDisposable
                 var dataOffset = checked(offset + 8);
                 if (chunkSize > (uint)(bytes.Length - dataOffset))
                 {
-                    throw new InvalidDataException($"XWMAの{fourCc}チャンクがファイル範囲を超えています。");
+                    throw new InvalidDataException(UiText.Format(
+                        "Preview.ChunkOutsideFile",
+                        fourCc));
                 }
 
                 var size = checked((int)chunkSize);
@@ -442,7 +452,9 @@ public sealed class XwmaPreviewPlayer : IDisposable
                 var nextOffset = checked(dataEnd + (int)(chunkSize & 1u));
                 if (nextOffset > bytes.Length && dataEnd != bytes.Length)
                 {
-                    throw new InvalidDataException($"XWMAの{fourCc}チャンクのパディングがファイル範囲を超えています。");
+                    throw new InvalidDataException(UiText.Format(
+                        "Preview.ChunkPaddingOutsideFile",
+                        fourCc));
                 }
 
                 switch (fourCc)
@@ -453,7 +465,8 @@ public sealed class XwmaPreviewPlayer : IDisposable
                     case "dpds":
                         if (size == 0 || (size & 3) != 0)
                         {
-                            throw new InvalidDataException("XWMAのdpdsチャンクが不正です。");
+                            throw new InvalidDataException(
+                                UiText.Get("Preview.InvalidDpdsChunk"));
                         }
 
                         packetTable = new uint[size / sizeof(uint)];
@@ -474,12 +487,14 @@ public sealed class XwmaPreviewPlayer : IDisposable
 
             if (formatBytes is null || audioBytes is null || packetTable is null)
             {
-                throw new InvalidDataException("XWMAにfmt、dpds、dataのいずれかがありません。");
+                throw new InvalidDataException(
+                    UiText.Get("Preview.RequiredChunkMissing"));
             }
 
             if (formatBytes.Length < 16)
             {
-                throw new InvalidDataException("XWMAのfmtチャンクが短すぎます。");
+                throw new InvalidDataException(
+                    UiText.Get("Preview.FmtChunkTooShort"));
             }
 
             var channels = BinaryPrimitives.ReadUInt16LittleEndian(formatBytes.AsSpan(2, 2));

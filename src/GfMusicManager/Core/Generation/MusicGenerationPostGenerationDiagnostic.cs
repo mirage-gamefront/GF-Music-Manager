@@ -1,7 +1,7 @@
 using System.Text.Json;
 using GfMusicManager.Core.Analysis;
+using GfMusicManager.Core.Localization;
 using GfMusicManager.Core.Planning;
-using Microsoft.Data.Sqlite;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
@@ -40,7 +40,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
 {
     private readonly BsaArchiveReader _archiveReader;
     private readonly PluginRecordScanner _pluginRecordScanner = new();
-    private readonly DfgMusicGenerationPackageValidator _dfgPackageValidator = new();
 
     public MusicGenerationPostGenerationDiagnostic(BsaArchiveReader archiveReader)
     {
@@ -64,12 +63,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         int expectedNewRecordCount,
         int maxNewRecordsPerPlugin,
         MusicGenerationPlanResolution? planResolution = null,
-        CancellationToken cancellationToken = default,
-        MusicGenerationOutputMode outputMode = MusicGenerationOutputMode.Normal,
-        DfgMusicGenerationOutputResult? dfgOutput = null,
-        string? dfgPackageDirectory = null,
-        string? dfgMetadataPath = null,
-        int? expectedDfgMusicTrackCount = null)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(plugins);
@@ -82,6 +76,17 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         var errors = new List<string>();
         var recordsByPlugin = new Dictionary<string, IReadOnlyList<PluginRecordSource>>(
             StringComparer.OrdinalIgnoreCase);
+        var disabledSourcePluginNames = settings
+            .SelectMany(setting => new[]
+                {
+                    setting.Record.Plugin,
+                    setting.MusicTypeRecord.Plugin
+                }
+                .Concat(setting.Tracks.Select(track => track.Record.Plugin)))
+            .Where(plugin => plugin.ModPriority != int.MinValue)
+            .Where(plugin => !plugin.ModEnabled || !plugin.Enabled)
+            .Select(plugin => plugin.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         void Check(string message) => checks.Add(message);
         void Error(string message) => errors.Add(message);
@@ -91,7 +96,9 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         var fullOutputDirectory = Path.GetFullPath(outputDirectory);
         if (!Directory.Exists(fullStageDirectory))
         {
-            Error($"生成ステージフォルダがありません: {fullStageDirectory}");
+            Error(UiText.Format(
+                "Generation.Diagnostic.StageDirectoryMissing",
+                fullStageDirectory));
             return CreateResult(checks, errors);
         }
 
@@ -108,17 +115,10 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             fullStageDirectory,
             plugins,
             recordsByPlugin,
+            disabledSourcePluginNames,
             Check,
             Error,
             cancellationToken);
-
-        if (outputMode == MusicGenerationOutputMode.Dfg)
-        {
-            ValidateDfgStaticMusicTracks(
-                recordsByPlugin,
-                Check,
-                Error);
-        }
 
         ValidateTracks(
             tracks,
@@ -132,16 +132,14 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             recordsByPlugin,
             Check,
             Error,
-            cancellationToken,
-            outputMode == MusicGenerationOutputMode.Dfg);
+            cancellationToken);
 
         ValidateIntegratedMusicTypes(
             integratedMusicTypes ?? Array.Empty<GeneratedMusicTypeOutput>(),
             recordsByPlugin,
             Check,
             Error,
-            cancellationToken,
-            outputMode == MusicGenerationOutputMode.Dfg);
+            cancellationToken);
 
         ValidateMtd(
             mtdFilePath,
@@ -149,11 +147,10 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             tracks,
             worldSpaces,
             integratedMusicTypes ?? Array.Empty<GeneratedMusicTypeOutput>(),
-                worldSpaceIndividualAssignment,
-                planResolution,
-                outputMode,
-                Check,
-                Error,
+            worldSpaceIndividualAssignment,
+            planResolution,
+            Check,
+            Error,
             cancellationToken);
 
         ValidateCellSkyPatcher(
@@ -189,74 +186,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             Error,
             cancellationToken);
 
-        if (outputMode == MusicGenerationOutputMode.Dfg)
-        {
-            DfgMusicGenerationPackageValidationResult dfgDiagnostic;
-            if (dfgOutput is not null)
-            {
-                dfgDiagnostic = _dfgPackageValidator.Validate(
-                    dfgOutput,
-                    cancellationToken);
-            }
-            else if (!string.IsNullOrWhiteSpace(dfgPackageDirectory))
-            {
-                dfgDiagnostic = _dfgPackageValidator.Validate(
-                    dfgPackageDirectory,
-                    dfgMetadataPath,
-                    cancellationToken: cancellationToken);
-            }
-            else
-            {
-                dfgDiagnostic = new DfgMusicGenerationPackageValidationResult(
-                    false,
-                    Array.Empty<string>(),
-                    new[] { "DFG packageの出力先がmanifestから解決できません。" });
-            }
-
-            foreach (var check in dfgDiagnostic.Checks)
-            {
-                Check($"DFG: {check}");
-            }
-
-            foreach (var errorMessage in dfgDiagnostic.Errors)
-            {
-                Error($"DFG: {errorMessage}");
-            }
-
-            if (expectedDfgMusicTrackCount is not null &&
-                dfgOutput is not null)
-            {
-                if (dfgOutput.MusicTrackCount == expectedDfgMusicTrackCount.Value)
-                {
-                    Check(
-                        $"DFG Music Track件数が採用Track件数と一致（{dfgOutput.MusicTrackCount}件）");
-                }
-                else
-                {
-                    Error(
-                        $"DFG Music Track件数が採用Track件数と一致しません：" +
-                        $"採用 {expectedDfgMusicTrackCount.Value}件 / DFG {dfgOutput.MusicTrackCount}件");
-                }
-            }
-
-            var packageDatabasePath = dfgOutput?.PackageDatabasePath;
-            if (string.IsNullOrWhiteSpace(packageDatabasePath) &&
-                !string.IsNullOrWhiteSpace(dfgPackageDirectory))
-            {
-                packageDatabasePath = Path.Combine(
-                    dfgPackageDirectory,
-                    "package.db");
-            }
-
-            ValidateDfgBridgeMusicTypePatches(
-                packageDatabasePath,
-                integratedMusicTypes ?? Array.Empty<GeneratedMusicTypeOutput>(),
-                worldSpaces,
-                Check,
-                Error,
-                cancellationToken);
-        }
-
         return CreateResult(checks, errors);
     }
 
@@ -291,7 +220,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                 Path.Combine(
                     stageDirectory,
                     cellSkyPatcherFileName.Replace('\\', Path.DirectorySeparatorChar)),
-                "Cell用SkyPatcher設定",
+                UiText.Get("Generation.Diagnostic.CellSkyPatcherLabel"),
                 check,
                 error);
         }
@@ -317,6 +246,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         string stageDirectory,
         IReadOnlyList<GeneratedPluginOutput> plugins,
         IDictionary<string, IReadOnlyList<PluginRecordSource>> recordsByPlugin,
+        IReadOnlySet<string> disabledSourcePluginNames,
         Action<string> check,
         Action<string> error,
         CancellationToken cancellationToken)
@@ -349,6 +279,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                 var musicTrackCount = CountRecords(records, "MusicTrack");
                 var musicTypeCount = CountRecords(records, "MusicType");
                 var worldSpaceCount = CountRecords(records, "Worldspace");
+                var supportRecordCount = CountRecords(records, "FormList");
                 ValidateCount(
                     $"{expected.PluginFileName} Music Track",
                     musicTrackCount,
@@ -367,6 +298,12 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     expected.WorldSpaceOverrideRecordCount,
                     check,
                     error);
+                ValidateCount(
+                    $"{expected.PluginFileName} support record",
+                    supportRecordCount,
+                    expected.NewSupportRecordCount,
+                    check,
+                    error);
 
                 using var generatedPlugin = SkyrimMod.CreateFromBinaryOverlay(
                     new ModPath(
@@ -383,6 +320,26 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     error($"{expected.PluginFileName}: ESL flag is missing");
                 }
 
+                var disabledMasters = generatedPlugin.ModHeader.MasterReferences
+                    .Select(reference => reference.Master.FileName.String)
+                    .Where(disabledSourcePluginNames.Contains)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (disabledMasters.Length == 0)
+                {
+                    check(UiText.Format(
+                        "Generation.Diagnostic.DisabledSourceMastersAbsent",
+                        expected.PluginFileName));
+                }
+                else
+                {
+                    error(UiText.Format(
+                        "Generation.Diagnostic.DisabledSourceMastersPresent",
+                        expected.PluginFileName,
+                        string.Join(", ", disabledMasters)));
+                }
+
                 if (issues.Count > 0)
                 {
                     check($"{expected.PluginFileName}: record scan completed with {issues.Count} non-fatal issue(s)");
@@ -395,148 +352,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         }
     }
 
-    private static void ValidateDfgStaticMusicTracks(
-        IReadOnlyDictionary<string, IReadOnlyList<PluginRecordSource>> recordsByPlugin,
-        Action<string> check,
-        Action<string> error)
-    {
-        var staticTrackCount = recordsByPlugin.Values.Sum(records =>
-            CountRecords(records, "MusicTrack"));
-        if (staticTrackCount == 0)
-        {
-            check("DFG: ESP内Music Trackは0件（DFG packageのみを使用）");
-            check("DFG: ESP Music TrackとのTrackKey重複なし");
-        }
-        else
-        {
-            error(
-                $"DFG: ESP内Music Trackが残っています（{staticTrackCount}件）。" +
-                "DFG方式ではMusic TrackをESPへ生成しません。");
-        }
-    }
-
-    private static void ValidateDfgBridgeMusicTypePatches(
-        string? packageDatabasePath,
-        IReadOnlyList<GeneratedMusicTypeOutput> integratedMusicTypes,
-        IReadOnlyList<GeneratedWorldSpaceOutput> worldSpaces,
-        Action<string> check,
-        Action<string> error,
-        CancellationToken cancellationToken)
-    {
-        var targets = integratedMusicTypes
-            .Select(type => (Label: $"統合用Music Type {type.MusicTypeEditorId}", FormKey: type.MusicTypeFormKey))
-            .Concat(worldSpaces.Select(worldSpace =>
-                (Label: $"WorldSpace用Music Type {worldSpace.MusicTypeEditorId}",
-                    FormKey: worldSpace.MusicTypeFormKey)))
-            .ToArray();
-        if (targets.Length == 0)
-        {
-            check("DFG: 統合用Music Typeの外部パッチは不要");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(packageDatabasePath) ||
-            !File.Exists(packageDatabasePath))
-        {
-            error("DFG: 統合用Music Typeの外部パッチを読むpackage.dbがありません");
-            return;
-        }
-
-        var patches = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        try
-        {
-            var connectionString = new SqliteConnectionStringBuilder
-            {
-                DataSource = Path.GetFullPath(packageDatabasePath),
-                Mode = SqliteOpenMode.ReadOnly,
-                Cache = SqliteCacheMode.Private,
-                Pooling = false
-            }.ToString();
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT source_plugin, local_form_id, form_kind, changes_json
-                FROM external_patches
-                WHERE form_kind = 'MusicType';
-                """;
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var key = CreateDfgPatchIdentity(
-                    reader.GetString(0),
-                    checked((uint)reader.GetInt64(1)),
-                    reader.GetString(2));
-                patches[key] = reader.GetString(3);
-            }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            error($"DFG: 統合用Music Typeの外部パッチを検証できません（{exception.Message}）");
-            return;
-        }
-
-        foreach (var target in targets)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!TryParseFormKey(target.FormKey, out var formKey))
-            {
-                error($"DFG: 統合用Music TypeのFormIDを解釈できません：{target.FormKey}");
-                continue;
-            }
-
-            var identity = CreateDfgPatchIdentity(
-                formKey.ModKey.FileName.String,
-                checked((uint)formKey.ID),
-                "MusicType");
-            if (!patches.TryGetValue(identity, out var changesJson))
-            {
-                error($"{target.Label}: DFG外部パッチがありません");
-                continue;
-            }
-
-            try
-            {
-                using var document = JsonDocument.Parse(changesJson);
-                var root = document.RootElement;
-                var tracks = root.GetProperty("fields")
-                    .GetProperty("musicTypeTracks");
-                var operation = tracks.GetProperty("operation").GetString();
-                var value = tracks.GetProperty("value");
-                if (!string.Equals(operation, "replace", StringComparison.OrdinalIgnoreCase) ||
-                    value.ValueKind != JsonValueKind.Array)
-                {
-                    error($"{target.Label}: DFG外部パッチがTrack一覧置換になっていません");
-                    continue;
-                }
-
-                var hasDfgReference = value.EnumerateArray().Any(reference =>
-                    reference.TryGetProperty("editorID", out var editorId) &&
-                    editorId.ValueKind == JsonValueKind.String &&
-                    !string.IsNullOrWhiteSpace(editorId.GetString()) &&
-                    !reference.TryGetProperty("formID", out _));
-                if (!hasDfgReference)
-                {
-                    error($"{target.Label}: DFG Music TrackのEditorID参照がありません");
-                    continue;
-                }
-
-                check($"{target.Label}: DFG外部パッチがTrack一覧を置換");
-            }
-            catch (Exception exception)
-            {
-                error($"{target.Label}: DFG外部パッチの内容を検証できません（{exception.Message}）");
-            }
-        }
-    }
-
-    private static string CreateDfgPatchIdentity(
-        string sourcePlugin,
-        uint localFormId,
-        string formKind) =>
-        $"{sourcePlugin}\u001f{localFormId:X8}\u001f{formKind}";
-
     private static void ValidateTracks(
         IReadOnlyList<GeneratedMusicTrackOutput> tracks,
         IReadOnlyDictionary<string, IReadOnlyList<PluginRecordSource>> recordsByPlugin,
@@ -547,16 +362,23 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         foreach (var expected in tracks)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            string Context(string message, string? virtualPath = null) =>
+                MusicGenerationFailureContext.Append(
+                    message,
+                    expected.ModName,
+                    new[] { expected.TrackKey },
+                    virtualPath ?? expected.VirtualPath);
+
             if (!recordsByPlugin.TryGetValue(expected.PluginFileName, out var records))
             {
-                error($"Music Track {expected.FormKey}: its ESP was not readable");
+                error(Context($"Music Track {expected.FormKey}: its ESP was not readable"));
                 continue;
             }
 
             var record = FindRecord(records, expected.FormKey, "MusicTrack");
             if (record is null)
             {
-                error($"Music Track {expected.FormKey}: generated record was not found");
+                error(Context($"Music Track {expected.FormKey}: generated record was not found"));
                 continue;
             }
 
@@ -568,7 +390,8 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     StringComparison.OrdinalIgnoreCase))
             {
                 error(
-                    $"Music Track {expected.FormKey}: TrackFilename does not match {expected.VirtualPath}");
+                    Context(
+                        $"Music Track {expected.FormKey}: TrackFilename does not match {expected.VirtualPath}"));
                 continue;
             }
 
@@ -578,7 +401,8 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             {
                 if (finaleAsset is not null && !string.IsNullOrWhiteSpace(finaleAsset.VirtualPath))
                 {
-                    error($"Music Track {expected.FormKey}: unexpected FinaleFilename was generated");
+                    error(Context(
+                        $"Music Track {expected.FormKey}: unexpected FinaleFilename was generated"));
                     continue;
                 }
             }
@@ -588,7 +412,9 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                          StringComparison.OrdinalIgnoreCase))
             {
                 error(
-                    $"Music Track {expected.FormKey}: FinaleFilename does not match {expected.FinaleVirtualPath}");
+                    Context(
+                        $"Music Track {expected.FormKey}: FinaleFilename does not match {expected.FinaleVirtualPath}",
+                        expected.FinaleVirtualPath));
                 continue;
             }
 
@@ -608,12 +434,19 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     StringComparer.OrdinalIgnoreCase))
             {
                 error(
-                    $"Music Track {expected.FormKey}: 再生条件が生成予定と一致しません " +
-                    $"(予定 {expectedConditionKeys.Length}件 / 生成 {actualConditionKeys.Length}件)");
+                    Context(
+                        UiText.Format(
+                            "Generation.Diagnostic.TrackConditionsMismatch",
+                            expected.FormKey,
+                            expectedConditionKeys.Length,
+                            actualConditionKeys.Length)));
                 continue;
             }
 
-            check($"Music Track {expected.FormKey}: 再生条件{actualConditionKeys.Length}件が一致");
+            check(UiText.Format(
+                "Generation.Diagnostic.TrackConditionsMatch",
+                expected.FormKey,
+                actualConditionKeys.Length));
         }
     }
 
@@ -622,8 +455,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         IReadOnlyDictionary<string, IReadOnlyList<PluginRecordSource>> recordsByPlugin,
         Action<string> check,
         Action<string> error,
-        CancellationToken cancellationToken,
-        bool requireEmptyStaticTracks)
+        CancellationToken cancellationToken)
     {
         foreach (var expected in worldSpaces)
         {
@@ -645,21 +477,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     .Where(reference => reference.FieldName.Equals("Tracks", StringComparison.OrdinalIgnoreCase))
                     .Select(reference => reference.FormKey)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                if (requireEmptyStaticTracks)
-                {
-                    if (registeredTracks.Count == 0)
-                    {
-                        check(
-                            $"WorldSpace {expected.WorldSpaceFormKey}: " +
-                            "DFG橋渡し用Music Typeの静的Trackは0件");
-                    }
-                    else
-                    {
-                        error(
-                            $"WorldSpace {expected.WorldSpaceFormKey}: " +
-                            $"DFG橋渡し用Music Typeに静的Trackが{registeredTracks.Count}件あります");
-                    }
-                }
                 var missingTracks = expected.TrackFormKeys
                     .Where(track => !registeredTracks.Contains(track))
                     .ToArray();
@@ -700,8 +517,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         IReadOnlyDictionary<string, IReadOnlyList<PluginRecordSource>> recordsByPlugin,
         Action<string> check,
         Action<string> error,
-        CancellationToken cancellationToken,
-        bool requireEmptyStaticTracks)
+        CancellationToken cancellationToken)
     {
         foreach (var expected in integratedMusicTypes)
         {
@@ -710,8 +526,9 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     expected.PluginFileName,
                     out var records))
             {
-                error(
-                    $"統合用Music Type {expected.MusicTypeEditorId}: 生成ESPを読み取れません");
+                error(UiText.Format(
+                    "Generation.Diagnostic.IntegratedTypePluginUnreadable",
+                    expected.MusicTypeEditorId));
                 continue;
             }
 
@@ -721,8 +538,9 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                 "MusicType");
             if (musicType is null)
             {
-                error(
-                    $"統合用Music Type {expected.MusicTypeEditorId}: レコードが見つかりません");
+                error(UiText.Format(
+                    "Generation.Diagnostic.IntegratedTypeMissing",
+                    expected.MusicTypeEditorId));
                 continue;
             }
 
@@ -734,32 +552,20 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var expectedTracks = expected.TrackFormKeys
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            if (requireEmptyStaticTracks)
-            {
-                if (registeredTracks.Count == 0)
-                {
-                    check(
-                        $"統合用Music Type {expected.MusicTypeEditorId}: " +
-                        "DFG橋渡し用の静的Trackは0件");
-                }
-                else
-                {
-                    error(
-                        $"統合用Music Type {expected.MusicTypeEditorId}: " +
-                        $"DFG橋渡し用Music Typeに静的Trackが{registeredTracks.Count}件あります");
-                }
-            }
             if (!registeredTracks.SetEquals(expectedTracks))
             {
-                error(
-                    $"統合用Music Type {expected.MusicTypeEditorId}: Track一覧が生成予定と一致しません " +
-                    $"(予定 {expectedTracks.Count}件 / 生成 {registeredTracks.Count}件)");
+                error(UiText.Format(
+                    "Generation.Diagnostic.IntegratedTypeTracksMismatch",
+                    expected.MusicTypeEditorId,
+                    expectedTracks.Count,
+                    registeredTracks.Count));
                 continue;
             }
 
-            check(
-                $"統合用Music Type {expected.MusicTypeEditorId}: " +
-                $"{expected.Scope}のTrack一覧が一致");
+            check(UiText.Format(
+                "Generation.Diagnostic.IntegratedTypeTracksMatch",
+                expected.MusicTypeEditorId,
+                expected.Scope));
         }
     }
 
@@ -775,11 +581,11 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         {
             if (cellSkyPatcherFileName is not null)
             {
-                error("Cell用SkyPatcher設定: 対象Cellがないのに出力ファイルが指定されています");
+                error(UiText.Get("Generation.Diagnostic.CellUnexpectedOutput"));
             }
             else
             {
-                check("Cell用SkyPatcher設定: 割り当てなし");
+                check(UiText.Get("Generation.Diagnostic.CellNoAssignments"));
             }
 
             return;
@@ -787,7 +593,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
 
         if (string.IsNullOrWhiteSpace(cellSkyPatcherFileName))
         {
-            error("Cell用SkyPatcher設定: 出力ファイルが指定されていません");
+            error(UiText.Get("Generation.Diagnostic.CellOutputMissing"));
             return;
         }
 
@@ -797,7 +603,9 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             cellSkyPatcherFileName.Replace('\\', Path.DirectorySeparatorChar));
         if (!File.Exists(path))
         {
-            error($"Cell用SkyPatcher設定: 出力ファイルがありません ({cellSkyPatcherFileName})");
+            error(UiText.Format(
+                "Generation.Diagnostic.CellFileMissing",
+                cellSkyPatcherFileName));
             return;
         }
 
@@ -819,17 +627,22 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     actualPatchLines,
                     StringComparer.OrdinalIgnoreCase))
             {
-                error(
-                    $"Cell用SkyPatcher設定: Cell割り当てが生成予定と一致しません " +
-                    $"(予定 {expectedPatchLines.Length}件 / 生成 {actualPatchLines.Length}件)");
+                error(UiText.Format(
+                    "Generation.Diagnostic.CellAssignmentsMismatch",
+                    expectedPatchLines.Length,
+                    actualPatchLines.Length));
                 return;
             }
 
-            check($"Cell用SkyPatcher設定: {actualPatchLines.Length}件の割り当てが一致");
+            check(UiText.Format(
+                "Generation.Diagnostic.CellAssignmentsMatch",
+                actualPatchLines.Length));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            error($"Cell用SkyPatcher設定: 出力ファイルを検証できません ({exception.Message})");
+            error(UiText.Format(
+                "Generation.Diagnostic.CellValidationFailed",
+                GenerationMessageFormatter.ExceptionDetail(exception)));
         }
     }
 
@@ -841,7 +654,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         IReadOnlyList<GeneratedMusicTypeOutput> integratedMusicTypes,
         bool worldSpaceIndividualAssignment,
         MusicGenerationPlanResolution? planResolution,
-        MusicGenerationOutputMode outputMode,
         Action<string> check,
         Action<string> error,
         CancellationToken cancellationToken)
@@ -866,9 +678,7 @@ public sealed class MusicGenerationPostGenerationDiagnostic
 
         if (planResolution is not null)
         {
-            if (outputMode != MusicGenerationOutputMode.Dfg)
-            {
-                ValidateResolvedTypeTrackLists(
+            ValidateResolvedTypeTrackLists(
                 mtdLines,
                 sections,
                 planResolution,
@@ -878,7 +688,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                 worldSpaceIndividualAssignment,
                 check,
                 error);
-            }
         }
 
         var settingsByKey = settings
@@ -895,19 +704,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             StringComparer.OrdinalIgnoreCase);
         var checkedMtdEntries = 0;
         var hasApplicableMtdEntry = false;
-
-        if (outputMode == MusicGenerationOutputMode.Dfg &&
-            planResolution is not null)
-        {
-            checkedMtdEntries += ValidateDfgMtdScopeMappings(
-                sections,
-                settings,
-                planResolution,
-                integratedByTarget,
-                check,
-                error);
-            hasApplicableMtdEntry = checkedMtdEntries > 0;
-        }
 
         foreach (var track in tracks)
         {
@@ -970,26 +766,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                     continue;
                 }
 
-                if (outputMode == MusicGenerationOutputMode.Dfg)
-                {
-                    if (setting.Scope is MusicSettingScope.Location or MusicSettingScope.Region &&
-                        !HasScopeMapping(
-                            sections,
-                            setting.Scope,
-                            setting.ScopeEditorId,
-                            setting.MusicTypeEditorId))
-                    {
-                        error(
-                            $"MTD: {setting.Scope} {setting.ScopeEditorId} does not map to " +
-                            $"Music Type {setting.MusicTypeEditorId}");
-                        continue;
-                    }
-
-                    hasApplicableMtdEntry = true;
-                    checkedMtdEntries++;
-                    continue;
-                }
-
                 hasApplicableMtdEntry = true;
                 if (!HasGeneralTrack(sections, setting.MusicTypeEditorId, expectedTrackId))
                 {
@@ -1022,85 +798,6 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         {
             check("MTD: no MTD assignment was required");
         }
-    }
-
-    private static int ValidateDfgMtdScopeMappings(
-        IReadOnlyDictionary<string, Dictionary<string, string>> sections,
-        IReadOnlyList<MusicSettingSource> settings,
-        MusicGenerationPlanResolution planResolution,
-        IReadOnlyDictionary<string, GeneratedMusicTypeOutput> integratedByTarget,
-        Action<string> check,
-        Action<string> error)
-    {
-        var settingsByKey = settings
-            .GroupBy(CreateDestinationKey, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                SelectRepresentativeSetting,
-                StringComparer.OrdinalIgnoreCase);
-        var checkedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var checkedCount = 0;
-        foreach (var entry in planResolution.MusicTypes
-                     .SelectMany(musicType => musicType.GeneratedEntries)
-                     .DistinctBy(entry => entry.AssetKey, StringComparer.OrdinalIgnoreCase))
-        {
-            foreach (var destination in entry.DestinationKeys)
-            {
-                if (destination.Scope is not MusicSettingScope.Location and
-                    not MusicSettingScope.Region)
-                {
-                    continue;
-                }
-
-                var destinationKey = CreateDestinationKey(destination);
-                if (!settingsByKey.TryGetValue(destinationKey, out var setting))
-                {
-                    error($"MTD: 定義元を解決できません（{destinationKey}）");
-                    continue;
-                }
-
-                var finalMusicTypeEditorId = setting.MusicTypeEditorId;
-                if (planResolution.TryGetIntegrationTarget(
-                        destination.Scope,
-                        destination.ScopeFormKey,
-                        out var integrationTarget) &&
-                    integratedByTarget.TryGetValue(
-                        integrationTarget.TargetKey,
-                        out var integratedMusicType))
-                {
-                    finalMusicTypeEditorId = integratedMusicType.MusicTypeEditorId;
-                }
-
-                var mappingKey = string.Join(
-                    "\u001f",
-                    destination.Scope,
-                    setting.ScopeEditorId ?? setting.ScopeFormKey,
-                    finalMusicTypeEditorId ?? string.Empty);
-                if (!checkedKeys.Add(mappingKey))
-                {
-                    continue;
-                }
-
-                if (!HasScopeMapping(
-                        sections,
-                        destination.Scope,
-                        setting.ScopeEditorId,
-                        finalMusicTypeEditorId))
-                {
-                    error(
-                        $"MTD: {destination.Scope} {setting.ScopeName} does not map to " +
-                        $"Music Type {finalMusicTypeEditorId ?? "(未定義)"}");
-                    continue;
-                }
-
-                checkedCount++;
-                check(
-                    $"MTD: DFG方式の{destination.Scope} {setting.ScopeName}が" +
-                    $"Music Type {finalMusicTypeEditorId}を参照");
-            }
-        }
-
-        return checkedCount;
     }
 
     private static void ValidateResolvedTypeTrackLists(
@@ -1251,23 +948,36 @@ public sealed class MusicGenerationPostGenerationDiagnostic
         foreach (var asset in assets)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            string Context(string message) =>
+                MusicGenerationFailureContext.Append(
+                    message,
+                    asset.ModName,
+                    asset.TrackKeys,
+                    asset.VirtualPath);
+
             if (asset.IsCopied)
             {
                 if (string.IsNullOrWhiteSpace(asset.OutputPath))
                 {
-                    error($"音源 {asset.VirtualPath}: copied asset has no output path");
+                    error(Context(UiText.Format(
+                        "Generation.Diagnostic.CopiedAssetNoOutputPath",
+                        asset.VirtualPath)));
                     continue;
                 }
 
                 if (!TryResolveStagePath(stageDirectory, asset.OutputPath, out var outputPath))
                 {
-                    error($"音源 {asset.VirtualPath}: output path escapes the generated MOD");
+                    error(Context(UiText.Format(
+                        "Generation.Diagnostic.AssetOutsideMod",
+                        asset.VirtualPath)));
                     continue;
                 }
 
                 if (!File.Exists(outputPath))
                 {
-                    error($"音源 {asset.VirtualPath}: copied file is missing");
+                    error(Context(UiText.Format(
+                        "Generation.Diagnostic.CopiedAssetMissing",
+                        asset.VirtualPath)));
                     continue;
                 }
 
@@ -1275,11 +985,17 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                 if (outputLength != asset.Length)
                 {
                     error(
-                        $"音源 {asset.VirtualPath}: copied file length mismatch (expected {asset.Length}, actual {outputLength})");
+                        Context(UiText.Format(
+                            "Generation.Diagnostic.CopiedAssetLengthMismatch",
+                            asset.VirtualPath,
+                            asset.Length,
+                            outputLength)));
                     continue;
                 }
 
-                check($"音源 {asset.VirtualPath}: copied file exists");
+                check(UiText.Format(
+                    "Generation.Diagnostic.CopiedAssetExists",
+                    asset.VirtualPath));
                 continue;
             }
 
@@ -1287,11 +1003,15 @@ public sealed class MusicGenerationPostGenerationDiagnostic
             {
                 if (!File.Exists(asset.SourcePath))
                 {
-                    error($"音源 {asset.VirtualPath}: referenced loose source is missing");
+                    error(Context(UiText.Format(
+                        "Generation.Diagnostic.LooseSourceMissing",
+                        asset.VirtualPath)));
                     continue;
                 }
 
-                check($"音源 {asset.VirtualPath}: referenced loose source exists");
+                check(UiText.Format(
+                    "Generation.Diagnostic.LooseSourceExists",
+                    asset.VirtualPath));
                 continue;
             }
 
@@ -1304,15 +1024,22 @@ public sealed class MusicGenerationPostGenerationDiagnostic
                             entryPath,
                             StringComparison.OrdinalIgnoreCase)))
                 {
-                    error($"音源 {asset.VirtualPath}: referenced BSA entry is missing");
+                    error(Context(UiText.Format(
+                        "Generation.Diagnostic.BsaEntryMissing",
+                        asset.VirtualPath)));
                     continue;
                 }
 
-                check($"音源 {asset.VirtualPath}: referenced BSA entry exists");
+                check(UiText.Format(
+                    "Generation.Diagnostic.BsaEntryExists",
+                    asset.VirtualPath));
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                error($"音源 {asset.VirtualPath}: referenced BSA could not be read ({exception.Message})");
+                error(Context(UiText.Format(
+                    "Generation.Diagnostic.BsaReadFailed",
+                    asset.VirtualPath,
+                    GenerationMessageFormatter.ExceptionDetail(exception))));
             }
         }
     }

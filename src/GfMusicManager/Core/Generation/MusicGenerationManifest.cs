@@ -42,10 +42,4 @@ public sealed record MusicGenerationManifest(
     IReadOnlyList<GeneratedAssetOutput> Assets,
     IReadOnlyList<MusicGenerationPlanEntryOutput> PlanEntries,
     int NewRecordCount,
-    int MaxNewRecordsPerPlugin)
-{
-    public MusicGenerationOutputMode OutputMode { get; init; } =
-        MusicGenerationOutputMode.Normal;
-
-    public string? DfgPackageDirectory { get; init; }
-}
+    int MaxNewRecordsPerPlugin);

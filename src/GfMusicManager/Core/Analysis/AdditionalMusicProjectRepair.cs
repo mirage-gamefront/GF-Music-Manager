@@ -1,3 +1,4 @@
+using GfMusicManager.Core.Localization;
 using SkyrimScan.Core.Models;
 
 namespace GfMusicManager.Core.Analysis;
@@ -35,13 +36,13 @@ internal static class AdditionalMusicProjectRepairCatalog
         {
             new PathRepairDefinition(
                 "AMP_Heroics_Path",
-                "「Definitely A Time For Heroics」の音源パス誤記",
+                "Repair.AdditionalMusicProject.HeroicsPath",
                 new[] { "ADMPIVCombat02", "ADMPIVCombatBoss03" },
                 new[] { "ADMP Definitely Time For Heroïcs.xwm" },
                 "ADMP Definitely A Time For Heroics.xwm"),
             new PathRepairDefinition(
                 "AMP_AweOfGodFearingMen_Path",
-                "「The Awe Of God Fearing Men」の音源パス不一致",
+                "Repair.AdditionalMusicProject.AwePath",
                 new[] { "ADMPIVExploreNight04" },
                 new[] { "ADMP The Awe Of God Fearing Men.xwm" },
                 "ADMP The Work Of God Fearing Men.xwm")
@@ -123,7 +124,7 @@ internal static class AdditionalMusicProjectRepairCatalog
 
                         repairs.Add(new AdditionalMusicProjectRepair(
                             definition.IssueId,
-                            definition.Description,
+                            UiText.Get(definition.DescriptionKey),
                             record.Plugin.Name,
                             record.FormKey,
                             record.EditorId,
@@ -193,7 +194,7 @@ internal static class AdditionalMusicProjectRepairCatalog
 
     private sealed record PathRepairDefinition(
         string IssueId,
-        string Description,
+        string DescriptionKey,
         IReadOnlyList<string> RecordEditorIds,
         IReadOnlyList<string> OriginalFileNames,
         string RepairedFileName);

@@ -94,7 +94,9 @@ public sealed class MusicGenerationApplicationService
         }
         catch (Exception exception)
         {
-            errors.Add($"生成前検証に失敗しました：{exception.Message}");
+            errors.Add(UiText.Format(
+                "Generation.Preflight.Exception",
+                GenerationMessageFormatter.ExceptionDetail(exception)));
         }
 
         return new MusicGenerationApplicationValidationResult(
@@ -208,8 +210,9 @@ public sealed class MusicGenerationApplicationService
         if (!validation.IsValid)
         {
             throw new MusicGenerationApplicationException(
-                "生成前検証で問題が見つかりました。\n" +
-                string.Join(Environment.NewLine, validation.Errors));
+                UiText.Format(
+                    "Generation.Preflight.Failed",
+                    string.Join(Environment.NewLine, validation.Errors)));
         }
 
         var output = _outputWriter.Generate(
@@ -220,8 +223,7 @@ public sealed class MusicGenerationApplicationService
             resolution!,
             conflicts);
         GfMusicManagerLog.Info(
-            $"Generation application: output completed in {generationStopwatch.Elapsed}. " +
-            $"mode={options.OutputMode}.");
+            $"Generation application: output completed in {generationStopwatch.Elapsed}.");
 
         return new MusicGenerationApplicationResult(
             prepared.Plan,
@@ -247,7 +249,7 @@ public sealed class MusicGenerationApplicationService
                 return CreateOutputValidationFailure(
                     outputDirectory,
                     manifestPath,
-                    $"生成MODのmanifestがありません：{manifestPath}");
+                    UiText.Format("Generation.OutputValidation.ManifestMissing", manifestPath));
             }
 
             var manifest = JsonSerializer.Deserialize<MusicGenerationManifest>(
@@ -258,7 +260,7 @@ public sealed class MusicGenerationApplicationService
                 return CreateOutputValidationFailure(
                     outputDirectory,
                     manifestPath,
-                    "生成MODのmanifestを読み込めませんでした。");
+                    UiText.Get("Generation.OutputValidation.ManifestUnreadable"));
             }
 
             if (manifest.SchemaVersion is < 5 or > 5)
@@ -266,7 +268,9 @@ public sealed class MusicGenerationApplicationService
                 return CreateOutputValidationFailure(
                     outputDirectory,
                     manifestPath,
-                    $"対応していないmanifestスキーマです：{manifest.SchemaVersion}");
+                    UiText.Format(
+                        "Generation.OutputValidation.ManifestSchemaUnsupported",
+                        manifest.SchemaVersion));
             }
 
             var prepared = Prepare(scanResult, planSnapshot);
@@ -283,16 +287,6 @@ public sealed class MusicGenerationApplicationService
             var integratedMusicTypes = manifest.IntegratedMusicTypes ??
                 Array.Empty<GeneratedMusicTypeOutput>();
             var assets = manifest.Assets ?? Array.Empty<GeneratedAssetOutput>();
-            var dfgPackageDirectory = manifest.OutputMode == MusicGenerationOutputMode.Dfg
-                ? ResolveGeneratedChildPath(
-                    outputDirectory,
-                    manifest.DfgPackageDirectory)
-                : null;
-            var dfgMetadataPath = manifest.OutputMode == MusicGenerationOutputMode.Dfg
-                ? Path.Combine(
-                    outputDirectory,
-                    DfgMusicGenerationPackageValidator.MetadataFileName)
-                : null;
             var diagnostic = _postGenerationDiagnostic.Run(
                 outputDirectory,
                 outputDirectory,
@@ -310,10 +304,7 @@ public sealed class MusicGenerationApplicationService
                 manifest.NewRecordCount,
                 manifest.MaxNewRecordsPerPlugin,
                 planResolution,
-                default,
-                manifest.OutputMode,
-                dfgPackageDirectory: dfgPackageDirectory,
-                dfgMetadataPath: dfgMetadataPath);
+                default);
 
             return new MusicGenerationOutputValidationResult(
                 diagnostic.IsSuccess,
@@ -333,45 +324,10 @@ public sealed class MusicGenerationApplicationService
             return CreateOutputValidationFailure(
                 outputDirectory,
                 manifestPath,
-                $"生成物の検証に失敗しました：{exception.Message}");
+                UiText.Format(
+                    "Generation.OutputValidation.Failed",
+                    GenerationMessageFormatter.ExceptionDetail(exception)));
         }
-    }
-
-    public DfgMusicGenerationApplicationResult GenerateDfg(
-        MusicScanApplicationResult scanResult,
-        MusicPlanSnapshot planSnapshot,
-        DfgMusicGenerationApplicationOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(scanResult);
-        ArgumentNullException.ThrowIfNull(planSnapshot);
-        ArgumentNullException.ThrowIfNull(options);
-
-        var applicationResult = Generate(
-            scanResult,
-            planSnapshot,
-            new MusicGenerationApplicationOptions
-            {
-                OutputModDirectory = options.OutputModDirectory,
-                OutputMode = MusicGenerationOutputMode.Dfg,
-                DfgPackageName = options.PackageName,
-                OverwriteExisting = options.OverwriteExisting,
-                WorldSpaceIndividualAssignment = options.WorldSpaceIndividualAssignment,
-                SelectedWorldSpaceFormKeys = options.SelectedWorldSpaceFormKeys,
-                ExistingMtdFileNames = options.ExistingMtdFileNames,
-                CapacityPolicy = options.CapacityPolicy,
-                Progress = options.Progress
-            },
-            cancellationToken);
-
-        var output = applicationResult.Output.DfgOutput ??
-            throw new MusicGenerationApplicationException(
-                "DFG方式の生成結果が共通生成パイプラインから返されませんでした。");
-
-        return new DfgMusicGenerationApplicationResult(
-            applicationResult.Plan,
-            applicationResult.PlanApplication,
-            output);
     }
 
     private PreparedGeneration Prepare(
@@ -399,11 +355,16 @@ public sealed class MusicGenerationApplicationService
             application.RestoredEntryCount != plan.Entries.Count)
         {
             var missing = application.MissingEntryCount > 0
-                ? $" 不一致キー：{string.Join(", ", application.MissingAssetKeys.Take(5))}"
+                ? UiText.Format(
+                    "Generation.PlanRestore.MismatchedKeys",
+                    string.Join(", ", application.MissingAssetKeys.Take(5)))
                 : string.Empty;
             throw new MusicGenerationApplicationException(
-                $"保存された生成計画と現在のスキャン結果が一致しません。" +
-                $"復元できた音源：{application.RestoredEntryCount}/{plan.Entries.Count}件。{missing}");
+                UiText.Format(
+                    "Generation.PlanRestore.Mismatch",
+                    application.RestoredEntryCount,
+                    plan.Entries.Count,
+                    missing));
         }
 
         GfMusicManagerLog.Info(
@@ -429,8 +390,6 @@ public sealed class MusicGenerationApplicationService
         new()
         {
             OutputModDirectory = outputDirectory,
-            OutputMode = options.OutputMode,
-            DfgPackageName = options.DfgPackageName,
             CapacityPolicy = options.CapacityPolicy,
             OverwriteExisting = options.OverwriteExisting,
             WorldSpaceIndividualAssignment = options.WorldSpaceIndividualAssignment,
@@ -458,43 +417,32 @@ public sealed class MusicGenerationApplicationService
 
         if (plan.KeepVanillaMusic is null)
         {
-            errors.Add("バニラ音源を残すか、残さないかが決まっていません。");
+            errors.Add(UiText.Get("Generation.Preflight.KeepVanillaRequired"));
         }
 
         if (adoptedEntries.Length == 0)
         {
-            errors.Add("採用された音源がありません。少なくとも1曲を採用してください。");
+            errors.Add(UiText.Get("Generation.Preflight.NoAdoptedAssets"));
         }
 
         var missingAssets = adoptedEntries.Count(entry => entry.Asset is null);
         if (missingAssets > 0)
         {
-            errors.Add($"採用済み音源の実体を取得できない項目があります：{missingAssets}件");
+            errors.Add(UiText.Format("Generation.Preflight.MissingAssets", missingAssets));
         }
 
         var emptyTrackEntries = adoptedEntries.Count(entry => entry.Tracks.Count == 0);
         if (emptyTrackEntries > 0)
         {
-            errors.Add($"Music Trackが割り当てられていない採用音源があります：{emptyTrackEntries}件");
-        }
-
-        var duplicatePathConflicts = conflicts
-            .Where(conflict =>
-                conflict.Kind == MusicGenerationPlanConflictKind.DuplicateVirtualPath &&
-                conflict.Entries.Count(entry => entry.IsAdopted) > 1)
-            .ToArray();
-        if (duplicatePathConflicts.Length > 0)
-        {
-            errors.Add(
-                $"同じ音源パスに複数の採用実体があります：{duplicatePathConflicts.Length}グループ。" +
-                "警告画面で採用を1つに絞ってください。");
+            errors.Add(UiText.Format("Generation.Preflight.EmptyTracks", emptyTrackEntries));
         }
 
         if (integrationConflictCount > 0)
         {
             warnings.Add(
-                $"Music Type統合対象があります：{integrationConflictCount}件。" +
-                "生成時に対象ごとに統合します。");
+                UiText.Format(
+                    "Generation.Preflight.IntegrationWarning",
+                    integrationConflictCount));
         }
 
         var existingMtdFileNames = ResolveExistingMtdFileNames(scanResult, options);
@@ -504,12 +452,12 @@ public sealed class MusicGenerationApplicationService
         {
             if (options.OverwriteExisting)
             {
-                warnings.Add("既存のGF Music Productは、診断成功後に置き換えられます。");
+                warnings.Add(UiText.Get("Generation.Preflight.ExistingProductReplace"));
             }
             else
             {
                 errors.Add(
-                    $"生成先がすでに存在します。再生成する場合は上書きを指定してください：{outputDirectory}");
+                    UiText.Format("Generation.Preflight.OutputExists", outputDirectory));
             }
         }
 
@@ -571,27 +519,6 @@ public sealed class MusicGenerationApplicationService
         options.ExistingMtdFileNames ??
         MusicTypeDistributorOutputNameResolver.DiscoverExistingFileNames(
             scanResult.Scan.Mods);
-
-    private static string? ResolveGeneratedChildPath(
-        string outputDirectory,
-        string? relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
-        {
-            return null;
-        }
-
-        var root = Path.GetFullPath(outputDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-            Path.DirectorySeparatorChar;
-        var resolved = Path.GetFullPath(
-            Path.Combine(
-                outputDirectory,
-                relativePath.Replace('/', Path.DirectorySeparatorChar)));
-        return resolved.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-            ? resolved
-            : null;
-    }
 
     private sealed record PreparedGeneration(
         MusicGenerationPlan Plan,

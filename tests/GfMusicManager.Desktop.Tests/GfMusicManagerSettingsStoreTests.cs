@@ -14,6 +14,7 @@ public sealed class GfMusicManagerSettingsStoreTests
         var settings = fixture.Store.Load();
 
         Assert.False(settings.EnableFileLogging);
+        Assert.Equal(GfMusicManagerSettingsDefaults.PreviewVolume, settings.PreviewVolume);
         Assert.False(File.Exists(fixture.SettingsPath));
     }
 
@@ -49,6 +50,34 @@ public sealed class GfMusicManagerSettingsStoreTests
 
         Assert.False(loaded.EnableFileLogging);
         Assert.Equal(UiLanguage.Japanese, loaded.Language);
+        Assert.Equal(GfMusicManagerSettingsDefaults.PreviewVolume, loaded.PreviewVolume);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(56)]
+    [InlineData(100)]
+    public void SaveAndLoadPersistsPreviewVolume(double volume)
+    {
+        using var fixture = new SettingsFixture();
+        fixture.Store.Save(new GfMusicManagerSettings(PreviewVolume: volume));
+
+        var loaded = fixture.Store.Load();
+
+        Assert.Equal(volume, loaded.PreviewVolume);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(101, 100)]
+    public void LoadClampsPreviewVolume(double stored, double expected)
+    {
+        using var fixture = new SettingsFixture();
+        fixture.Store.Save(new GfMusicManagerSettings(PreviewVolume: stored));
+
+        var loaded = fixture.Store.Load();
+
+        Assert.Equal(expected, loaded.PreviewVolume);
     }
 
     [Theory]

@@ -224,17 +224,6 @@ public sealed class AudioDuplicateGroupReview
         Group = group;
         GroupName = $"AudioDuplicateGroup_{index}";
         _modPriorities = modPriorities ?? EmptyModPriorities;
-        var existingAdoptedSources = group.Sources
-            .Where(source => adoptedAssetKeys.Contains(source.AssetKey))
-            .ToArray();
-        var selectedPathAssetKey = group.RequiresSingleSelection
-            ? existingAdoptedSources.Length == 1
-                ? existingAdoptedSources[0].AssetKey
-                : group.Sources
-                    .FirstOrDefault(source => source.Asset.IsVfsWinner && source.Asset.ModEnabled)
-                    ?.AssetKey
-                    ?? group.Sources.FirstOrDefault()?.AssetKey
-            : null;
         var defaultToAdopted = adoptedAssetKeys.Count == 0;
         Sources = new ObservableCollection<AudioDuplicateSourceReview>(
             group.Sources.Select(source =>
@@ -247,9 +236,7 @@ public sealed class AudioDuplicateGroupReview
                     source,
                     GroupName,
                     group.RequiresSingleSelection,
-                    group.RequiresSingleSelection
-                        ? string.Equals(source.AssetKey, selectedPathAssetKey, StringComparison.OrdinalIgnoreCase)
-                        : defaultToAdopted || adoptedAssetKeys.Contains(source.AssetKey),
+                    defaultToAdopted || adoptedAssetKeys.Contains(source.AssetKey),
                     usageSettings);
             }));
     }
@@ -261,29 +248,25 @@ public sealed class AudioDuplicateGroupReview
     public AudioDuplicateGroup Group { get; }
     public string GroupName { get; }
     public ObservableCollection<AudioDuplicateSourceReview> Sources { get; }
-    public bool IsPathConflict => Group.RequiresSingleSelection;
+    public bool IsPathConflict => Group.Kind == AudioDuplicateKind.PathConflict;
     public string HeaderText =>
         UiText.Format("AudioDuplicate.Group.Header", Group.KindText, Sources.Count);
     public string SubjectText => Group.Kind == AudioDuplicateKind.PathConflict
         ? UiText.Format("AudioDuplicate.Subject.Path", Group.Subject)
         : UiText.Format("AudioDuplicate.Subject.Target", Group.Subject);
+    public Visibility SubjectVisibility => Group.Kind == AudioDuplicateKind.PathConflict
+        ? Visibility.Visible
+        : Visibility.Collapsed;
     public string MethodText => UiText.Format("AudioDuplicate.Method", Group.DetectionMethod);
     public string ScoreText => Group.ScoreText;
-    public string SelectionHintText => Group.RequiresSingleSelection
-        ? UiText.Get("AudioDuplicate.SelectionHint.Single")
-        : UiText.Get("AudioDuplicate.SelectionHint.Multiple");
 
-    public bool HasValidDecision => Group.RequiresSingleSelection
-        ? Sources.Count(source => source.IsSelected) == 1
-        : true;
+    public bool HasValidDecision => true;
 
-    public string ValidationMessage => Group.RequiresSingleSelection
-        ? UiText.Format("AudioDuplicate.Validation.Path", Group.Subject)
-        : string.Empty;
+    public string ValidationMessage => string.Empty;
 
     public IReadOnlySet<string> GetAdoptedAssetKeys() =>
         Sources
-            .Where(source => Group.RequiresSingleSelection ? source.IsSelected : source.IsIncluded)
+            .Where(source => source.IsIncluded)
             .Select(source => source.Source.AssetKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -361,10 +344,10 @@ public sealed class AudioDuplicateSourceReview : INotifyPropertyChanged
         Source = source;
         GroupName = groupName;
         UsageSettings = usageSettings ?? Array.Empty<MusicSettingSource>();
-        RadioVisibility = isPathConflict ? Visibility.Visible : Visibility.Collapsed;
-        CheckBoxVisibility = isPathConflict ? Visibility.Collapsed : Visibility.Visible;
-        _isSelected = isPathConflict && isAdopted;
-        _isIncluded = !isPathConflict && isAdopted;
+        RadioVisibility = Visibility.Collapsed;
+        CheckBoxVisibility = Visibility.Visible;
+        _isSelected = false;
+        _isIncluded = isAdopted;
     }
 
     public AudioDuplicateSource Source { get; }
@@ -380,6 +363,8 @@ public sealed class AudioDuplicateSourceReview : INotifyPropertyChanged
                 ? UiText.Format("AudioDuplicate.Detail.Duration", duration)
                 : string.Empty);
     public string LocationText => Source.LocationText;
+    public string SourceLocationText =>
+        UiText.Format("AudioDuplicate.SourceLocation", LocationText);
     public IReadOnlyList<MusicSettingSource> UsageSettings { get; }
     public string UsageText => UsageSettings.Count == 0
         ? UiText.Get("AudioDuplicate.Usage.None")
@@ -390,15 +375,7 @@ public sealed class AudioDuplicateSourceReview : INotifyPropertyChanged
             " ／ ",
             UsageSettings
                 .Select(FormatUsage)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(6)) +
-          (UsageSettings
-               .Select(FormatUsage)
-               .Distinct(StringComparer.OrdinalIgnoreCase)
-               .Skip(6)
-               .Any()
-              ? $" ／ {UiText.Get("AudioDuplicate.Usage.Other")}"
-              : string.Empty);
+                .Distinct(StringComparer.OrdinalIgnoreCase));
     public Visibility RadioVisibility { get; }
     public Visibility CheckBoxVisibility { get; }
     public bool IsSelected

@@ -270,20 +270,7 @@ public sealed class ExistingMusicProductLoaderTests
         Assert.True(result.IsDetected);
         Assert.True(result.IsComplete, string.Join(Environment.NewLine, result.Warnings));
         Assert.NotNull(result.Manifest);
-        if (result.Manifest!.OutputMode == MusicGenerationOutputMode.Dfg)
-        {
-            Assert.Empty(result.Manifest.Tracks);
-            Assert.False(string.IsNullOrWhiteSpace(result.Manifest.DfgPackageDirectory));
-            Assert.True(
-                Directory.Exists(Path.Combine(
-                    result.OutputModDirectory,
-                    result.Manifest.DfgPackageDirectory!.Replace('/', Path.DirectorySeparatorChar))),
-                result.Manifest.DfgPackageDirectory);
-        }
-        else
-        {
-            Assert.NotEmpty(result.Manifest.Tracks);
-        }
+        Assert.NotEmpty(result.Manifest!.Tracks);
     }
 
     private sealed class RecordingProgress(ICollection<ScanProgress> reports) : IProgress<ScanProgress>

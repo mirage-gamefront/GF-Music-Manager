@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private const string FilterAll = "all";
     private const string FilterAdopted = "adopted";
     private const string FilterWarning = "warning";
+    private const string FilterFinale = "finale";
     private const string FilterUnused = "unused";
     private const string FilterDisabled = "disabled";
 
@@ -69,6 +70,7 @@ public partial class MainWindow : Window
     private bool _includeDisabledMods;
     private bool _enableFileLogging;
     private string _language = UiLanguage.Japanese;
+    private double _previewVolume = GfMusicManagerSettingsDefaults.PreviewVolume;
     private bool _isScanning;
     private bool _hasCompletedScan;
     private bool _isLoadingProfiles;
@@ -84,6 +86,7 @@ public partial class MainWindow : Window
     private bool _trackViewRefreshQueued;
     private bool _isRefreshingTrackView;
     private bool _isUpdatingVisibleSelection;
+    private bool _isSynchronizingTrackGridSelection;
     private int _scanModCurrent;
     private int _scanModTotal;
     private int _scanPluginCurrent;
@@ -102,6 +105,7 @@ public partial class MainWindow : Window
     {
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         GfMusicManagerLog.Info("MainWindow constructor: begin.");
+        _isRestoringSettings = true;
         InitializeComponent();
         Title = DesktopProductInfo.WindowTitle;
         Loaded += MainWindow_Loaded;
@@ -124,7 +128,6 @@ public partial class MainWindow : Window
                 ? "Settings.Language.Japanese"
                 : "Settings.Language.English")));
         SettingsProfileComboBox.IsEnabled = false;
-        _isRestoringSettings = true;
         try
         {
             RestoreSavedSettings();
@@ -156,6 +159,7 @@ public partial class MainWindow : Window
         _draftSaveTimer.Stop();
         SaveDraftNow();
         _previewTimer.Stop();
+        SaveSettings();
         _previewPlayer.Dispose();
         base.OnClosed(e);
         GfMusicManagerLog.Info("MainWindow closed.");
@@ -173,6 +177,9 @@ public partial class MainWindow : Window
         EnableFileLoggingCheckBox.IsChecked = _enableFileLogging;
         _language = UiLanguage.Normalize(settings.Language);
         LanguageComboBox.SelectedValue = _language;
+        _previewVolume = settings.PreviewVolume;
+        PreviewVolumeSlider.Value = _previewVolume;
+        _previewPlayer.Volume = (float)(_previewVolume / 100.0);
 
         if (string.IsNullOrWhiteSpace(settings.Mo2Root))
         {
@@ -1341,39 +1348,6 @@ public partial class MainWindow : Window
         GfMusicManagerLog.Info("ScanProgressOverlay: hidden.");
     }
 
-    private void BeginGenerationProgressOverlay()
-    {
-        ScanProgressBar.Value = 0;
-        ScanProgressTitleText.Text = UiText.Get("Main.GenerationProgress");
-        ScanProgressCountPanel.Visibility = Visibility.Collapsed;
-        ScanProgressSummaryText.Visibility = Visibility.Visible;
-        ScanProgressSummaryText.Text = UiText.Get("Main.GenerationPreparing");
-        ScanProgressStageText.Text = UiText.Get("Main.GenerationWaiting");
-        ScanProgressStageText.ToolTip = null;
-        ScanProgressOverlay.Visibility = Visibility.Visible;
-        GfMusicManagerLog.Info("GenerationProgressOverlay: shown.");
-    }
-
-    private void UpdateGenerationProgressOverlay(MusicGenerationProgress item)
-    {
-        ScanProgressTitleText.Text = item.Stage == MusicGenerationProgressStage.Diagnosing
-            ? UiText.Get("Main.GenerationDiagnosing")
-            : UiText.Get("Main.GenerationProgress");
-        ScanProgressBar.Value = Math.Clamp(item.Percent, 0, 100);
-        ScanProgressSummaryText.Visibility = Visibility.Visible;
-        ScanProgressSummaryText.Text = item.Total > 0
-            ? UiText.Format("Main.ProgressCurrentTotal", item.Message, item.Current, item.Total)
-            : item.Message;
-        ScanProgressStageText.Text = item.Message;
-        ScanProgressStageText.ToolTip = item.Message;
-    }
-
-    private void EndGenerationProgressOverlay()
-    {
-        ScanProgressOverlay.Visibility = Visibility.Collapsed;
-        GfMusicManagerLog.Info("GenerationProgressOverlay: hidden.");
-    }
-
     private void ApplyScanResult(
         ScanResult result,
         MusicAnalysisResult musicAnalysis,
@@ -1637,7 +1611,8 @@ public partial class MainWindow : Window
             _includeDisabledMods,
             _createWorldSpaceMusicSettings,
             _enableFileLogging,
-            _language));
+            _language,
+            _previewVolume));
     }
 
     private void ReopenForLanguageChange()
@@ -1764,6 +1739,13 @@ public partial class MainWindow : Window
         RefreshTrackView();
     }
 
+    private void FinaleOnlyButton_Click(object sender, RoutedEventArgs e)
+    {
+        _sourceFilter = null;
+        _filterMode = FilterFinale;
+        RefreshTrackView();
+    }
+
     private void UnusedCountButton_Click(object sender, RoutedEventArgs e)
     {
         _sourceFilter = null;
@@ -1782,14 +1764,16 @@ public partial class MainWindow : Window
 
     private void VisibleSelectionToggleButton_Click(object sender, RoutedEventArgs e)
     {
-        var visibleTracks = _tracksView.OfType<TrackRow>().ToArray();
+        var visibleTracks = GetVisibleOperationSelectableTracks(
+            _tracksView.OfType<TrackRow>());
         if (visibleTracks.Length == 0)
         {
-            GfMusicManagerLog.Warning("VisibleSelectionToggleButton_Click: no visible tracks.");
+            GfMusicManagerLog.Warning(
+                "VisibleSelectionToggleButton_Click: no selectable visible tracks.");
             return;
         }
 
-        var selectVisibleTracks = !visibleTracks.All(track => track.IsSelected);
+        var selectVisibleTracks = visibleTracks.Any(track => !track.IsSelected);
         _isUpdatingVisibleSelection = true;
         try
         {
@@ -2006,6 +1990,29 @@ public partial class MainWindow : Window
 
     private void TrackGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_isSynchronizingTrackGridSelection)
+        {
+            return;
+        }
+
+        _isSynchronizingTrackGridSelection = true;
+        try
+        {
+            foreach (var removedItem in e.RemovedItems.OfType<TrackRow>())
+            {
+                removedItem.IsSelected = false;
+            }
+
+            foreach (var addedItem in e.AddedItems.OfType<TrackRow>())
+            {
+                addedItem.IsSelected = true;
+            }
+        }
+        finally
+        {
+            _isSynchronizingTrackGridSelection = false;
+        }
+
         if (TrackGrid.SelectedItem is TrackRow row)
         {
             if (!AreSameAsset(_previewPlayer.CurrentAsset, row.Asset))
@@ -2131,6 +2138,7 @@ public partial class MainWindow : Window
     private void PreviewVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         var value = Math.Clamp(e.NewValue, 0, 100);
+        _previewVolume = value;
         _previewPlayer.Volume = (float)(value / 100.0);
         if (PreviewVolumeText is not null)
         {
@@ -2546,13 +2554,13 @@ public partial class MainWindow : Window
         }
 
         ApplyReviewButton.IsEnabled = false;
+        GenerationProgressWindow? generationProgressWindow = null;
         try
         {
             GfMusicManagerLog.Info(
                 $"ApplyReviewButton_Click: generation requested. output={outputDirectory}, " +
                     $"settings={_availableMusicSettings.Count}, overwrite={overwriteExisting}, " +
                     $"worldSpaceIndividual={worldSpaceIndividualAssignment}, " +
-                    $"outputMode={MusicGenerationOutputMode.Normal}, " +
                     $"enableGeneratedMod={enableGeneratedMod}, disableSourceEsp={disableSourceEsp}, " +
                     $"expectedPlugins={string.Join(',', expectedPluginNames)}, " +
                     $"sourcePlugins={sourcePluginNames.Count}, " +
@@ -2563,22 +2571,29 @@ public partial class MainWindow : Window
                     UiText.Get("Main.ScanRequired"));
             }
 
+            generationProgressWindow = new GenerationProgressWindow
+            {
+                Owner = this
+            };
             var generationProgress = new Progress<MusicGenerationProgress>(
-                UpdateGenerationProgressOverlay);
-            BeginGenerationProgressOverlay();
+                generationProgressWindow.Update);
+            generationProgressWindow.Show();
+            IsEnabled = false;
             var applicationResult = await Task.Run(() => _musicGenerationApplicationService.Generate(
                 _applicationScanResult,
                 _generationPlan,
                 new MusicGenerationApplicationOptions
                 {
                     OutputModDirectory = outputDirectory,
-                    OutputMode = MusicGenerationOutputMode.Normal,
                     OverwriteExisting = overwriteExisting,
                     WorldSpaceIndividualAssignment = worldSpaceIndividualAssignment,
                     SelectedWorldSpaceFormKeys = selectedWorldSpaceFormKeys,
                     ExistingMtdFileNames = _existingMtdFileNames,
                     Progress = generationProgress
                 }));
+            IsEnabled = true;
+            generationProgressWindow.CloseAfterOperation();
+            generationProgressWindow = null;
             var result = applicationResult.Output;
             var generatedMusicTrackCount = result.Tracks.Count;
 
@@ -2679,7 +2694,8 @@ public partial class MainWindow : Window
         }
         finally
         {
-            EndGenerationProgressOverlay();
+            IsEnabled = true;
+            generationProgressWindow?.CloseAfterOperation();
             ApplyReviewButton.IsEnabled = true;
         }
     }
@@ -2788,7 +2804,7 @@ public partial class MainWindow : Window
         return string.Join(Environment.NewLine, lines);
     }
 
-    private static string BuildGenerationCompletedMessage(
+    internal static string BuildGenerationCompletedMessage(
         MusicGenerationOutputResult result,
         bool generatedModEnabled,
         string profileName)
@@ -2820,11 +2836,25 @@ public partial class MainWindow : Window
                     generatedState)));
         }
 
-        lines.Add(UiText.Format("Main.AudioCount", result.Tracks.Count));
+        var primaryAssetKeys = result.Tracks
+            .Select(track => track.AssetKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var primaryAudioCount = primaryAssetKeys.Count;
+        var finaleAudioCount = result.Assets.Count(asset =>
+            !primaryAssetKeys.Contains(asset.AssetKey));
+        lines.Add(string.Empty);
+        lines.Add(UiText.Get("Main.GenerationSummarySeparator"));
+        lines.Add(UiText.Format("Main.PrimaryAudioCount", primaryAudioCount));
+        lines.Add(UiText.Format("Main.FinaleAudioCount", finaleAudioCount));
+        lines.Add(UiText.Format("Main.MusicTrackCount", result.Tracks.Count));
+        lines.Add(UiText.Get("Main.GenerationSummarySeparator"));
         lines.Add(UiText.Format(
-            "Main.AssetHandlingSummary",
-            result.Assets.Count(asset => !asset.IsCopied),
+            "Main.ReferenceAssetCount",
+            result.Assets.Count(asset => !asset.IsCopied)));
+        lines.Add(UiText.Format(
+            "Main.CopiedAssetCount",
             result.Assets.Count(asset => asset.IsCopied)));
+        lines.Add(UiText.Get("Main.GenerationSummarySeparator"));
         if (result.Cells.Count > 0 && result.CellSkyPatcherFilePath is not null)
         {
             lines.Add(UiText.Format("Main.CellApplySummary", result.Cells.Count));
@@ -2853,6 +2883,11 @@ public partial class MainWindow : Window
         }
 
         if (_filterMode == FilterWarning && !row.HasWarning)
+        {
+            return false;
+        }
+
+        if (_filterMode == FilterFinale && !row.IsFinale)
         {
             return false;
         }
@@ -2958,6 +2993,7 @@ public partial class MainWindow : Window
         var adopted = _tracks.Where(x => x.IsAdopted).ToList();
         var selected = _tracks.Count(x => x.IsSelected);
         var visibleTracks = _tracksView.OfType<TrackRow>().ToArray();
+        var visibleOperationTracks = GetVisibleOperationSelectableTracks(visibleTracks);
         var references = adopted.Count(x => x.HandlingKind == TrackAssetHandling.Reference);
         var copies = adopted.Count(x => x.HandlingKind == TrackAssetHandling.Copy);
         var audioWarnings = _audioDuplicateGroups.Count;
@@ -2993,15 +3029,16 @@ public partial class MainWindow : Window
         SelectAdoptButton.IsEnabled = hasSelectedTracks;
         ExcludeSelectionButton.IsEnabled = hasSelectedTracks;
         OpenReviewButton.IsEnabled = adopted.Count > 0;
-        var allVisibleTracksSelected = visibleTracks.Length > 0 &&
-                                       visibleTracks.All(track => track.IsSelected);
+        var allVisibleTracksSelected = visibleOperationTracks.Length > 0 &&
+                                       visibleOperationTracks.All(track => track.IsSelected);
         VisibleSelectionToggleText.Text = allVisibleTracksSelected
             ? UiText.Get("Main.VisibleSelectionClear")
             : UiText.Get("Main.VisibleSelectionAll");
         VisibleSelectionToggleButton.ToolTip = allVisibleTracksSelected
             ? UiText.Get("Main.VisibleSelectionClearTooltip")
             : UiText.Get("Main.VisibleSelectionAllTooltip");
-        VisibleSelectionToggleButton.IsEnabled = visibleTracks.Length > 0 && !_isScanning;
+        VisibleSelectionToggleButton.IsEnabled =
+            visibleOperationTracks.Length > 0 && !_isScanning;
         FilterButtonText.Text = _musicFilterOptions.IsEmpty
             ? UiText.Get("Main.Filter")
             : UiText.Format("Main.FilterWithCount", _musicFilterOptions.ActiveRuleCount);
@@ -3011,6 +3048,15 @@ public partial class MainWindow : Window
         FilterButton.IsEnabled = !_isScanning;
         MusicTypeManagementButton.IsEnabled = _availableMusicSettings.Count > 0 && !_isScanning;
         UpdateNavigationSelectionVisuals();
+    }
+
+    internal static TrackRow[] GetVisibleOperationSelectableTracks(
+        IEnumerable<TrackRow> visibleTracks)
+    {
+        ArgumentNullException.ThrowIfNull(visibleTracks);
+        return visibleTracks
+            .Where(track => track.IsOperationSelectable)
+            .ToArray();
     }
 
     private void UpdateNavigationSelectionVisuals()
@@ -3024,6 +3070,9 @@ public partial class MainWindow : Window
         SetNavigationButtonStyle(
             WarningLibraryButton,
             _sourceFilter is null && _filterMode == FilterWarning);
+        SetNavigationButtonStyle(
+            FinaleLibraryButton,
+            _sourceFilter is null && _filterMode == FilterFinale);
         SetNavigationButtonStyle(
             AllSourcesButton,
             _sourceFilter is null && _filterMode == FilterAll);
@@ -3149,8 +3198,7 @@ public partial class MainWindow : Window
             ? FindResource("GreenAccent") as System.Windows.Media.Brush
             : FindResource("AmberAccent") as System.Windows.Media.Brush;
         SelectedPlacementText.Text = row.Placement;
-        SelectedAdoptionText.Text = UiText.Get(
-            row.IsAdopted ? "Main.SelectedAdopted" : "Main.SelectedExcluded");
+        SelectedAdoptionText.Text = row.AdoptionStatusText;
         SelectedAdoptionText.Foreground = row.IsAdopted
             ? FindResource("GreenAccent") as System.Windows.Media.Brush
             : FindResource("MutedForeground") as System.Windows.Media.Brush;
@@ -3170,10 +3218,7 @@ public partial class MainWindow : Window
                 new[]
                 {
                     row.Warning,
-                    row.AutomaticResolutionText,
-                    row.HasAudioDuplicateWarning
-                        ? UiText.Get("Main.WarningReviewInstruction")
-                        : string.Empty
+                    row.AutomaticResolutionText
                 }
                     .Where(text => !string.IsNullOrWhiteSpace(text)));
             WarningBorder.Background = row.HasWarning
@@ -3257,7 +3302,8 @@ public sealed class TrackRow : INotifyPropertyChanged
         IReadOnlyList<PluginRecordSource>? availableWeatherRecords = null,
         IReadOnlyList<MusicDefinitionConflict>? definitionConflicts = null,
         string? automaticResolutionText = null,
-        IReadOnlyList<AudioDuplicateGroup>? audioDuplicateGroups = null)
+        IReadOnlyList<AudioDuplicateGroup>? audioDuplicateGroups = null,
+        MusicAssetRole assetRole = MusicAssetRole.Unmapped)
     {
         Title = title;
         Source = source;
@@ -3268,6 +3314,7 @@ public sealed class TrackRow : INotifyPropertyChanged
         Warning = warning;
         AutomaticResolutionText = automaticResolutionText ?? string.Empty;
         AudioDuplicateGroups = audioDuplicateGroups ?? Array.Empty<AudioDuplicateGroup>();
+        AssetRole = assetRole;
         Asset = asset;
         _isSelected = isSelected;
         _musicSettings = musicSettings ?? Array.Empty<MusicSettingSource>();
@@ -3279,7 +3326,7 @@ public sealed class TrackRow : INotifyPropertyChanged
                 asset is not null
                     ? MusicGenerationPlanEntry.CreateAssetKey(asset)
                     : $"untracked:{title}",
-                isSelected,
+                assetRole != MusicAssetRole.FinaleOnly && isSelected,
                 _musicSettings,
                 _musicConditions);
         AvailableMusicSettings = BuildAvailableSettings(_musicSettings, availableMusicSettings);
@@ -3321,11 +3368,15 @@ public sealed class TrackRow : INotifyPropertyChanged
         var warning = asset.ModEnabled
             ? string.Empty
             : UiText.Get("Main.DisabledAudioWarning");
-        var automaticResolutionText = duplicateSources is { Count: > 1 }
-            ? UiText.Get("Main.DuplicateAudioWarning")
-                .Replace("\n", Environment.NewLine, StringComparison.Ordinal)
-            : string.Empty;
-        var generationPlanEntry = generationPlan?.GetOrCreate(asset, musicSettings, musicConditions);
+        var automaticResolutionText = BuildAudioDuplicateWarningText(
+            audioDuplicateGroups,
+            duplicateSources is { Count: > 1 });
+        var assetRole = assetBinding?.Role ?? (musicSettings.Count > 0
+            ? MusicAssetRole.Primary
+            : MusicAssetRole.Unmapped);
+        var generationPlanEntry = assetRole == MusicAssetRole.FinaleOnly
+            ? null
+            : generationPlan?.GetOrCreate(asset, musicSettings, musicConditions);
         return new TrackRow(
             title,
             asset.ModName,
@@ -3345,7 +3396,52 @@ public sealed class TrackRow : INotifyPropertyChanged
             musicAnalysis?.WeatherCandidates,
             definitionConflicts,
             automaticResolutionText,
-            audioDuplicateGroups);
+            audioDuplicateGroups,
+            assetRole);
+    }
+
+    internal static string BuildAudioDuplicateWarningText(
+        IReadOnlyList<AudioDuplicateGroup>? groups,
+        bool hasDuplicatePathSources = false)
+    {
+        var kinds = groups?
+            .Select(group => group.Kind)
+            .ToHashSet()
+            ?? new HashSet<AudioDuplicateKind>();
+        if (hasDuplicatePathSources)
+        {
+            kinds.Add(AudioDuplicateKind.PathConflict);
+        }
+
+        var sections = new List<string>();
+        AddSection(
+            AudioDuplicateKind.PathConflict,
+            "Analysis.AudioDuplicate.Kind.PathConflict",
+            "AudioDuplicate.Page.PathConflict");
+        AddSection(
+            AudioDuplicateKind.ContentMatch,
+            "Analysis.AudioDuplicate.Kind.ContentMatch",
+            "AudioDuplicate.Page.ContentMatch");
+        AddSection(
+            AudioDuplicateKind.SimilarCandidate,
+            "Analysis.AudioDuplicate.Kind.SimilarCandidate",
+            "AudioDuplicate.Page.Similar");
+        return string.Join(Environment.NewLine + Environment.NewLine, sections);
+
+        void AddSection(
+            AudioDuplicateKind kind,
+            string headingResourceKey,
+            string descriptionResourceKey)
+        {
+            if (kinds.Contains(kind))
+            {
+                sections.Add(UiText.Format(
+                        "Main.AudioDuplicateWarningSection",
+                        UiText.Get(headingResourceKey),
+                        UiText.Get(descriptionResourceKey))
+                    .Replace("\n", Environment.NewLine, StringComparison.Ordinal));
+            }
+        }
     }
 
     public string Title { get; }
@@ -3386,13 +3482,20 @@ public sealed class TrackRow : INotifyPropertyChanged
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count());
 
-    public bool IsUnused => _musicSettings.Count == 0;
+    public MusicAssetRole AssetRole { get; }
+    public bool IsFinale => AssetRole == MusicAssetRole.FinaleOnly;
+    public bool IsOperationSelectable => !IsFinale;
+    public bool IsUnused => !IsFinale && _musicSettings.Count == 0;
 
     public bool IsAdopted
     {
         get => _generationPlanEntry.IsAdopted;
         set
         {
+            if (IsFinale)
+            {
+                return;
+            }
             if (_generationPlanEntry.IsAdopted == value)
             {
                 return;
@@ -3409,6 +3512,10 @@ public sealed class TrackRow : INotifyPropertyChanged
         get => _isSelected;
         set
         {
+            if (IsFinale && value)
+            {
+                return;
+            }
             if (_isSelected == value)
             {
                 return;
@@ -3420,7 +3527,11 @@ public sealed class TrackRow : INotifyPropertyChanged
     }
 
     public string AdoptionStatusText => UiText.Get(
-        IsAdopted ? "Main.SelectedAdopted" : "Main.SelectedExcluded");
+        IsFinale
+            ? "Main.SelectedFinale"
+            : IsAdopted
+                ? "Main.SelectedAdopted"
+                : "Main.SelectedExcluded");
 
     public void ReplaceMusicSettings(IEnumerable<MusicSettingSource> settings)
     {

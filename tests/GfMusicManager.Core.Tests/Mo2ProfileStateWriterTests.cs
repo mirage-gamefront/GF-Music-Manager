@@ -1,3 +1,4 @@
+using GfMusicManager.Application;
 using SkyrimScan.Core.Scanning;
 using Xunit;
 
@@ -5,6 +6,45 @@ namespace GfMusicManager.Core.Tests;
 
 public sealed class Mo2ProfileStateWriterTests
 {
+    [Fact]
+    public void ApplicationApply_RefreshesRunningMo2EvenWhenProfileFilesAlreadyMatch()
+    {
+        var root = Directory.CreateTempSubdirectory("gf-mo2-refresh-");
+        try
+        {
+            var profilePath = Path.Combine(root.FullName, "profiles", "Main");
+            Directory.CreateDirectory(profilePath);
+            File.WriteAllLines(
+                Path.Combine(profilePath, "modlist.txt"),
+                new[] { "+GF Music Product", "+Base Mod" });
+            File.WriteAllLines(
+                Path.Combine(profilePath, "loadorder.txt"),
+                new[] { "Skyrim.esm", "GF Music Product.esp" });
+            File.WriteAllLines(
+                Path.Combine(profilePath, "plugins.txt"),
+                new[] { "*Skyrim.esm", "*GF Music Product.esp" });
+            var refresher = new RecordingMo2RunningInstanceRefresher();
+            var service = new MusicMo2ApplicationService(
+                runningInstanceRefresher: refresher);
+
+            var result = service.Apply(new MusicMo2ApplicationOptions
+            {
+                Mo2Root = root.FullName,
+                ProfileName = "Main",
+                GeneratedPluginNames = new[] { "GF Music Product.esp" }
+            });
+
+            Assert.False(result.Changed);
+            Assert.Equal(1, refresher.CallCount);
+            Assert.Equal(root.FullName, refresher.Mo2Root);
+            Assert.Equal("Main", refresher.ProfileName);
+        }
+        finally
+        {
+            DeleteDirectory(root.FullName);
+        }
+    }
+
     [Fact]
     public void Apply_UpdatesGeneratedModAndPluginAndDisablesSourcePlugin()
     {
@@ -157,7 +197,7 @@ public sealed class Mo2ProfileStateWriterTests
     [Fact]
     public void Apply_RemovesOldGeneratedPluginsWhenCurrentOutputHasNoPlugin()
     {
-        var root = Directory.CreateTempSubdirectory("gf-mo2-state-dfg-");
+        var root = Directory.CreateTempSubdirectory("gf-mo2-state-no-plugin-");
         try
         {
             var profilePath = Path.Combine(root.FullName, "profiles", "Main");
@@ -200,6 +240,23 @@ public sealed class Mo2ProfileStateWriterTests
         if (Directory.Exists(path))
         {
             Directory.Delete(path, recursive: true);
+        }
+    }
+
+    private sealed class RecordingMo2RunningInstanceRefresher :
+        IMo2RunningInstanceRefresher
+    {
+        public int CallCount { get; private set; }
+
+        public string? Mo2Root { get; private set; }
+
+        public string? ProfileName { get; private set; }
+
+        public void RefreshIfRunning(string mo2Root, string profileName)
+        {
+            CallCount++;
+            Mo2Root = mo2Root;
+            ProfileName = profileName;
         }
     }
 }

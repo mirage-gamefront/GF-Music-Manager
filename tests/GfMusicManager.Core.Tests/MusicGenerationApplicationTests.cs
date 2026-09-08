@@ -127,6 +127,12 @@ public sealed class MusicGenerationApplicationTests
                 report => report.Stage == MusicGenerationProgressStage.Preparing &&
                           report.Current == 1 &&
                           report.Total == 1);
+            Assert.Contains(
+                progressReports,
+                report => report.Stage == MusicGenerationProgressStage.Writing &&
+                          report.Current == 1 &&
+                          report.Total == 1 &&
+                          report.Percent >= 68);
 
             var directOutputDirectory = Path.Combine(root.FullName, "GF Music Product Direct");
             var scanWithoutAssets = scanResult with

@@ -5,13 +5,21 @@ using GfMusicManager.Core.Localization;
 
 namespace GfMusicManager.Desktop;
 
+internal static class GfMusicManagerSettingsDefaults
+{
+    public const double PreviewVolume = 100;
+    public const double MinimumPreviewVolume = 0;
+    public const double MaximumPreviewVolume = 100;
+}
+
 internal sealed record GfMusicManagerSettings(
     string? Mo2Root = null,
     string? ProfileName = null,
     bool IncludeDisabledMods = false,
     bool CreateWorldSpaceMusicSettings = false,
     bool EnableFileLogging = false,
-    string Language = UiLanguage.Japanese);
+    string Language = UiLanguage.Japanese,
+    double PreviewVolume = GfMusicManagerSettingsDefaults.PreviewVolume);
 
 internal sealed class GfMusicManagerSettingsStore
 {
@@ -50,13 +58,18 @@ internal sealed class GfMusicManagerSettingsStore
                                File.ReadAllText(_settingsPath),
                                JsonOptions) ??
                            new GfMusicManagerSettings();
-            settings = settings with { Language = UiLanguage.Normalize(settings.Language) };
+            settings = settings with
+            {
+                Language = UiLanguage.Normalize(settings.Language),
+                PreviewVolume = NormalizePreviewVolume(settings.PreviewVolume)
+            };
             GfMusicManagerLog.Info(
                 $"Settings.Load: complete. root={settings.Mo2Root ?? "<none>"}, " +
                 $"profile={settings.ProfileName ?? "<none>"}, " +
                 $"includeDisabled={settings.IncludeDisabledMods}, " +
                 $"worldSpaceMusicSettings={settings.CreateWorldSpaceMusicSettings}, " +
-                $"fileLogging={settings.EnableFileLogging}, language={settings.Language}.");
+                $"fileLogging={settings.EnableFileLogging}, language={settings.Language}, " +
+                $"previewVolume={settings.PreviewVolume:0.##}.");
             return settings;
         }
         catch (Exception exception) when (
@@ -76,7 +89,8 @@ internal sealed class GfMusicManagerSettingsStore
             $"profile={settings.ProfileName ?? "<none>"}, " +
             $"includeDisabled={settings.IncludeDisabledMods}, " +
             $"worldSpaceMusicSettings={settings.CreateWorldSpaceMusicSettings}, " +
-            $"fileLogging={settings.EnableFileLogging}, language={settings.Language}.");
+            $"fileLogging={settings.EnableFileLogging}, language={settings.Language}, " +
+            $"previewVolume={settings.PreviewVolume:0.##}.");
         try
         {
             var directory = Path.GetDirectoryName(_settingsPath);
@@ -97,4 +111,12 @@ internal sealed class GfMusicManagerSettingsStore
             // Settings are a convenience; a profile scan must not fail because they cannot be saved.
         }
     }
+
+    private static double NormalizePreviewVolume(double value) =>
+        double.IsFinite(value)
+            ? Math.Clamp(
+                value,
+                GfMusicManagerSettingsDefaults.MinimumPreviewVolume,
+                GfMusicManagerSettingsDefaults.MaximumPreviewVolume)
+            : GfMusicManagerSettingsDefaults.PreviewVolume;
 }

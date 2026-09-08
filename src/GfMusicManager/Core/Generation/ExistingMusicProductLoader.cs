@@ -83,7 +83,9 @@ public sealed class ExistingMusicProductLoader
         var manifestPath = Path.Combine(fullOutputDirectory, ManifestFileName);
         if (!File.Exists(manifestPath))
         {
-            warnings.Add($"既存のGF Music Productに{ManifestFileName}がありません。再編集用の設定を復元できません。");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.ManifestMissing",
+                ManifestFileName));
             return new ExistingMusicProductLoadResult(
                 fullOutputDirectory,
                 true,
@@ -102,7 +104,10 @@ public sealed class ExistingMusicProductLoader
         }
         catch (Exception exception)
         {
-            warnings.Add($"GFMusicProduct.jsonを読み込めません：{exception.Message}");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.ManifestReadFailed",
+                ManifestFileName,
+                GenerationMessageFormatter.ExceptionDetail(exception)));
             return new ExistingMusicProductLoadResult(
                 fullOutputDirectory,
                 true,
@@ -113,7 +118,9 @@ public sealed class ExistingMusicProductLoader
 
         if (manifest is null)
         {
-            warnings.Add("GFMusicProduct.jsonの内容が空です。");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.ManifestEmpty",
+                ManifestFileName));
             return new ExistingMusicProductLoadResult(
                 fullOutputDirectory,
                 true,
@@ -124,7 +131,10 @@ public sealed class ExistingMusicProductLoader
 
         if (manifest.SchemaVersion is < 4 or > 5)
         {
-            warnings.Add($"GFMusicProduct.jsonのスキーマバージョンに対応していません：{manifest.SchemaVersion}");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.ManifestSchemaUnsupported",
+                ManifestFileName,
+                manifest.SchemaVersion));
         }
 
         var normalizedManifest = manifest with
@@ -135,14 +145,16 @@ public sealed class ExistingMusicProductLoader
 
         if (string.IsNullOrWhiteSpace(normalizedManifest.MtdFileName))
         {
-            warnings.Add("生成MTDファイル名が記録されていません。");
+            warnings.Add(UiText.Get("Generation.ExistingProduct.MtdNameMissing"));
             requiredFileFailure = true;
         }
         else if (!File.Exists(CombineRelativePath(
                      fullOutputDirectory,
                      normalizedManifest.MtdFileName)))
         {
-            warnings.Add($"生成MTDファイルが見つかりません：{normalizedManifest.MtdFileName}");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.MtdMissing",
+                normalizedManifest.MtdFileName));
             requiredFileFailure = true;
         }
         else
@@ -155,7 +167,7 @@ public sealed class ExistingMusicProductLoader
 
         if (normalizedManifest.Plugins.Count == 0)
         {
-            warnings.Add("生成ESPが記録されていません。");
+            warnings.Add(UiText.Get("Generation.ExistingProduct.PluginsMissing"));
             requiredFileFailure = true;
         }
 
@@ -165,7 +177,9 @@ public sealed class ExistingMusicProductLoader
             var pluginPath = CombineRelativePath(fullOutputDirectory, plugin.PluginFileName);
             if (!File.Exists(pluginPath))
             {
-                warnings.Add($"生成ESPが見つかりません：{plugin.PluginFileName}");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.PluginMissing",
+                    plugin.PluginFileName));
                 requiredFileFailure = true;
                 continue;
             }
@@ -189,7 +203,10 @@ public sealed class ExistingMusicProductLoader
             }
             catch (Exception exception)
             {
-                warnings.Add($"生成ESPを読み込めません：{plugin.PluginFileName} ({exception.Message})");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.PluginReadFailed",
+                    plugin.PluginFileName,
+                    GenerationMessageFormatter.ExceptionDetail(exception)));
                 requiredFileFailure = true;
     }
 }
@@ -201,7 +218,9 @@ public sealed class ExistingMusicProductLoader
                 fullOutputDirectory,
                 normalizedManifest.CellSkyPatcherFileName)))
         {
-            warnings.Add($"Cell用SkyPatcher設定が見つかりません：{normalizedManifest.CellSkyPatcherFileName}");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.CellSkyPatcherMissing",
+                normalizedManifest.CellSkyPatcherFileName));
             requiredFileFailure = true;
         }
 
@@ -209,7 +228,9 @@ public sealed class ExistingMusicProductLoader
 
         if (normalizedManifest.PlanEntries.Count == 0)
         {
-            warnings.Add("GFMusicProduct.jsonが旧形式のため、採用・除外状態を完全には復元できません。採用Trackのみ復元しました。");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.LegacyManifest",
+                ManifestFileName));
         }
 
         GfMusicManagerLog.Info(
@@ -242,7 +263,9 @@ public sealed class ExistingMusicProductLoader
         {
             if (!recordsByFormKey.TryGetValue(track.FormKey, out var record))
             {
-                warnings.Add($"生成Music TrackがESP内に見つかりません：{track.FormKey}");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.TrackMissing",
+                    track.FormKey));
                 continue;
             }
 
@@ -252,7 +275,9 @@ public sealed class ExistingMusicProductLoader
                     StringComparison.OrdinalIgnoreCase));
             if (!hasExpectedPath)
             {
-                warnings.Add($"生成Music Trackの音源パスがJSONと一致しません：{track.FormKey}");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.TrackPathMismatch",
+                    track.FormKey));
             }
         }
 
@@ -260,7 +285,9 @@ public sealed class ExistingMusicProductLoader
         {
             if (!recordsByFormKey.ContainsKey(musicType.MusicTypeFormKey))
             {
-                warnings.Add($"統合用Music TypeがESP内に見つかりません：{musicType.MusicTypeFormKey}");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.IntegratedMusicTypeMissing",
+                    musicType.MusicTypeFormKey));
             }
         }
     }
@@ -275,7 +302,9 @@ public sealed class ExistingMusicProductLoader
             var text = File.ReadAllText(mtdPath);
             if (string.IsNullOrWhiteSpace(text))
             {
-                warnings.Add($"生成MTDが空です：{manifest.MtdFileName}");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.MtdEmpty",
+                    manifest.MtdFileName));
                 return;
             }
 
@@ -283,12 +312,17 @@ public sealed class ExistingMusicProductLoader
                 !text.Contains("[Location]", StringComparison.OrdinalIgnoreCase) &&
                 !text.Contains("[Region]", StringComparison.OrdinalIgnoreCase))
             {
-                warnings.Add($"生成MTDにMusic Type・Location・Regionの設定セクションがありません：{manifest.MtdFileName}");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.MtdSectionsMissing",
+                    manifest.MtdFileName));
             }
         }
         catch (Exception exception)
         {
-            warnings.Add($"生成MTDを読み込めません：{manifest.MtdFileName} ({exception.Message})");
+            warnings.Add(UiText.Format(
+                "Generation.ExistingProduct.MtdReadFailed",
+                manifest.MtdFileName,
+                GenerationMessageFormatter.ExceptionDetail(exception)));
         }
     }
 
@@ -306,7 +340,9 @@ public sealed class ExistingMusicProductLoader
             {
                 if (string.IsNullOrWhiteSpace(asset.OutputPath))
                 {
-                    warnings.Add($"コピー音源の出力パスが記録されていません：{asset.VirtualPath}");
+                    warnings.Add(UiText.Format(
+                        "Generation.ExistingProduct.CopiedAssetOutputPathMissing",
+                        asset.VirtualPath));
                     requiredFileFailure = true;
                     continue;
                 }
@@ -314,7 +350,9 @@ public sealed class ExistingMusicProductLoader
                 var outputPath = CombineRelativePath(outputDirectory, asset.OutputPath);
                 if (!File.Exists(outputPath))
                 {
-                    warnings.Add($"コピー音源が見つかりません：{asset.OutputPath}");
+                    warnings.Add(UiText.Format(
+                        "Generation.ExistingProduct.CopiedAssetMissing",
+                        asset.OutputPath));
                     requiredFileFailure = true;
                 }
 
@@ -325,7 +363,9 @@ public sealed class ExistingMusicProductLoader
             {
                 if (!File.Exists(asset.SourcePath))
                 {
-                    warnings.Add($"参照音源が見つかりません：{asset.SourcePath}");
+                    warnings.Add(UiText.Format(
+                        "Generation.ExistingProduct.LooseAssetMissing",
+                        asset.SourcePath));
                     requiredFileFailure = true;
                 }
 
@@ -335,7 +375,10 @@ public sealed class ExistingMusicProductLoader
             if (!File.Exists(asset.SourcePath) ||
                 string.IsNullOrWhiteSpace(asset.ArchiveEntryPath))
             {
-                warnings.Add($"参照BSA音源が見つかりません：{asset.SourcePath} / {asset.ArchiveEntryPath}");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.BsaAssetMissing",
+                    asset.SourcePath,
+                    asset.ArchiveEntryPath));
                 requiredFileFailure = true;
                 continue;
             }
@@ -354,13 +397,19 @@ public sealed class ExistingMusicProductLoader
 
                 if (!entries.Contains(NormalizeVirtualPath(asset.ArchiveEntryPath!)))
                 {
-                    warnings.Add($"参照BSA内の音源エントリが見つかりません：{asset.SourcePath} / {asset.ArchiveEntryPath}");
+                    warnings.Add(UiText.Format(
+                        "Generation.ExistingProduct.BsaEntryMissing",
+                        asset.SourcePath,
+                        asset.ArchiveEntryPath));
                     requiredFileFailure = true;
                 }
             }
             catch (Exception exception)
             {
-                warnings.Add($"参照BSAを確認できません：{asset.SourcePath} ({exception.Message})");
+                warnings.Add(UiText.Format(
+                    "Generation.ExistingProduct.BsaReadFailed",
+                    asset.SourcePath,
+                    GenerationMessageFormatter.ExceptionDetail(exception)));
                 requiredFileFailure = true;
             }
         }
@@ -406,6 +455,7 @@ public sealed class MusicGenerationPlanRestorer
         ArgumentNullException.ThrowIfNull(settings);
 
         var warnings = new List<string>();
+        var unresolvedDestinationCount = 0;
         var restoredAssetKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var entriesByAssetKey = plan.Entries.ToDictionary(
             entry => entry.AssetKey,
@@ -480,9 +530,12 @@ public sealed class MusicGenerationPlanRestorer
                 }
                 else if (destinationKeys.Count > 0)
                 {
+                    unresolvedDestinationCount += unresolved;
                     warnings.Add(
-                        $"保存済み音源のMusic Type割り当てを復元できません：{savedEntry.VirtualPath} " +
-                        $"({unresolved}件)");
+                        UiText.Format(
+                            "Generation.PlanRestore.UnresolvedDestinations",
+                            savedEntry.VirtualPath,
+                            unresolved));
                 }
 
                 if (savedEntry.Tracks is { Count: > 0 })
@@ -497,8 +550,10 @@ public sealed class MusicGenerationPlanRestorer
                 else if (savedEntry.Conditions is { Count: > 0 })
                 {
                     warnings.Add(
-                        $"旧形式の音源単位の再生条件は、複数Trackの音源へ一括適用せず解析結果を保持しました：" +
-                        $"{savedEntry.VirtualPath} ({entry.Tracks.Count}件)");
+                        UiText.Format(
+                            "Generation.PlanRestore.LegacyConditions",
+                            savedEntry.VirtualPath,
+                            entry.Tracks.Count));
                 }
             }
 
@@ -524,8 +579,6 @@ public sealed class MusicGenerationPlanRestorer
                 group => group.Count(),
                 StringComparer.OrdinalIgnoreCase);
         var missingEntryCount = missingEntries.Length;
-        var unresolvedDestinationCount = warnings.Count(warning =>
-            warning.Contains("Music Type割り当て", StringComparison.Ordinal));
         GfMusicManagerLog.Info(
             $"MusicGenerationPlanRestorer: restored={restoredAssetKeys.Count}, " +
             $"missing={missingEntryCount}, unresolvedDestinations={unresolvedDestinationCount}, " +
@@ -555,7 +608,7 @@ public sealed class MusicGenerationPlanRestorer
         var parts = assetKey.Split('\u001f');
         return parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1])
             ? parts[1]
-            : "不明なMOD";
+            : UiText.Get("Generation.PlanRestore.UnknownMod");
     }
 
     private static bool TryResolveDestinations(

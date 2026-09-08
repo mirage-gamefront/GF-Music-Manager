@@ -16,6 +16,8 @@ public sealed class MainWindowStartupTests
         using var completed = new ManualResetEventSlim();
         var settingsDirectory = Directory.CreateTempSubdirectory("gf-music-language-settings-");
         var settingsPath = Path.Combine(settingsDirectory.FullName, "settings.json");
+        new GfMusicManagerSettingsStore(settingsPath).Save(
+            new GfMusicManagerSettings(PreviewVolume: 56));
         var thread = new Thread(() =>
         {
             System.Windows.Application? application = null;
@@ -30,8 +32,8 @@ public sealed class MainWindowStartupTests
                 var store = new GfMusicManagerSettingsStore(settingsPath);
                 window = new MainWindow(store);
                 Assert.Equal(DesktopProductInfo.WindowTitle, window.Title);
-                Assert.Equal("0.9.0-beta.2", DesktopProductInfo.Version);
-                Assert.Null(window.FindName("DfgOutputModeRadioButton"));
+                Assert.Equal("0.9.0-beta.3", DesktopProductInfo.Version);
+                Assert.Equal(56, window.PreviewVolumeSlider.Value);
                 window.SettingsMo2RootTextBox.Text = string.Empty;
                 window.LanguageComboBox.SelectedValue = UiLanguage.English;
 
@@ -43,6 +45,7 @@ public sealed class MainWindowStartupTests
                 Assert.Null(settings.Mo2Root);
                 Assert.Null(settings.ProfileName);
                 Assert.Equal(UiLanguage.English, settings.Language);
+                Assert.Equal(56, settings.PreviewVolume);
             }
             catch (Exception exception)
             {

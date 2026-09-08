@@ -36,7 +36,7 @@ public sealed class AudioDuplicateDetector
         {
             throw new ArgumentOutOfRangeException(
                 nameof(fingerprintMaxDegreeOfParallelism),
-                "Fingerprintの同時実行数は1以上で指定してください。");
+                UiText.Get("AudioDuplicate.FingerprintParallelismInvalid"));
         }
     }
 
@@ -104,8 +104,8 @@ public sealed class AudioDuplicateDetector
                 $"path:{group.Key}",
                 AudioDuplicateKind.PathConflict,
                 group.Key,
-                "同じゲーム内パスに複数の音源実体があります。出力MODでは同じパスを同時に使えないため、採用する実体を1つ選択してください。",
-                "正規化したゲーム内音源パスの一致",
+                UiText.Get("AudioDuplicate.PathConflict.Description"),
+                UiText.Get("AudioDuplicate.PathConflict.Reason"),
                 ToSources(group)));
         }
 
@@ -122,8 +122,8 @@ public sealed class AudioDuplicateDetector
                 $"content:{group.Key}",
                 AudioDuplicateKind.ContentMatch,
                 subject,
-                "ゲーム内パスは異なりますが、音声ファイルの内容が一致しています。ゲーム上のパス競合ではないため、両方を別音源として採用できます。",
-                "音声ファイル全体のSHA-256一致",
+                UiText.Get("AudioDuplicate.ContentMatch.Description"),
+                UiText.Get("AudioDuplicate.ContentMatch.Reason"),
                 ToSources(group)));
         }
 
@@ -335,8 +335,8 @@ public sealed class AudioDuplicateDetector
                 $"similar:{string.Join("|", componentSources.Select(source => source.AssetKey).Order(StringComparer.OrdinalIgnoreCase))}",
                 AudioDuplicateKind.SimilarCandidate,
                 subject,
-                "音量・再エンコード・前後の無音部分などの差を含め、同じ音源の可能性があります。自動では除外せず、試聴して判断してください。",
-                "正規化したモノラル波形の特徴量比較",
+                UiText.Get("AudioDuplicate.Similar.Description"),
+                UiText.Get("AudioDuplicate.Similar.Reason"),
                 ToSources(componentSources),
                 score));
         }
@@ -420,7 +420,9 @@ public sealed class AudioDuplicateDetector
 
         if (!File.Exists(asset.SourcePath))
         {
-            throw new FileNotFoundException("音源ファイルが見つかりません。", asset.SourcePath);
+            throw new FileNotFoundException(
+                UiText.Get("AudioDuplicate.SourceFileMissing"),
+                asset.SourcePath);
         }
 
         return File.ReadAllBytes(asset.SourcePath);

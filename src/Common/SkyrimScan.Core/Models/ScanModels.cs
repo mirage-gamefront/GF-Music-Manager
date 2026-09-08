@@ -155,6 +155,18 @@ public sealed record PluginRecordConditionSource(
     public string? WeatherFormKey { get; init; }
 
     /// <summary>
+    /// The FormKey of a Location referenced by condition data, when the
+    /// underlying condition exposes one.
+    /// </summary>
+    public string? LocationFormKey { get; init; }
+
+    public string? WorldspaceOrListFormKey { get; init; }
+
+    public string? FormListFormKey { get; init; }
+
+    public string? QuestFormKey { get; init; }
+
+    /// <summary>
     /// The concrete comparison arm used by the condition. Music-track
     /// conditions normally compare against a float, but the distinction is
     /// retained so a non-float condition is never silently rewritten.

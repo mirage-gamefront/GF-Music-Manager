@@ -36,8 +36,8 @@ public sealed class MusicGenerationCapacityTests
             MusicGenerationCapacityPolicy.CurrentAe);
 
         Assert.Equal(2, estimate.Plugins.Count);
-        Assert.Equal(4096, estimate.Plugins[0].NewRecordCount);
-        Assert.Equal(1, estimate.Plugins[1].NewRecordCount);
+        Assert.Equal(4095, estimate.Plugins[0].NewRecordCount);
+        Assert.Equal(2, estimate.Plugins[1].NewRecordCount);
         Assert.Equal("GF Music Product.esp", estimate.Plugins[0].PluginFileName);
         Assert.Equal("GF Music Product - 02.esp", estimate.Plugins[1].PluginFileName);
         Assert.Equal(4097, estimate.Plugins.SelectMany(plugin => plugin.AssetKeys).Count());
@@ -86,10 +86,30 @@ public sealed class MusicGenerationCapacityTests
             MusicGenerationCapacityPolicy.CurrentAe,
             additionalMusicTypeRecordCount: 1);
 
-        Assert.Single(estimate.Plugins);
-        Assert.Equal(4095, estimate.Plugins[0].NewMusicTrackRecordCount);
+        Assert.Equal(2, estimate.Plugins.Count);
+        Assert.Equal(4094, estimate.Plugins[0].NewMusicTrackRecordCount);
         Assert.Equal(1, estimate.Plugins[0].NewMusicTypeRecordCount);
-        Assert.Equal(4096, estimate.Plugins[0].NewRecordCount);
+        Assert.Equal(4095, estimate.Plugins[0].NewRecordCount);
+        Assert.Equal(1, estimate.Plugins[1].NewMusicTrackRecordCount);
+    }
+
+    [Fact]
+    public void Estimate_ReservesConditionSupportRecordsOnTheFirstPlugin()
+    {
+        var plan = CreatePlan(4095);
+
+        var estimate = new MusicGenerationCapacityPlanner().Estimate(
+            plan,
+            MusicGenerationCapacityPolicy.CurrentAe,
+            additionalSupportRecordCount: 1);
+
+        Assert.Equal(1, estimate.NewSupportRecordCount);
+        Assert.Equal(2, estimate.Plugins.Count);
+        Assert.Equal(4094, estimate.Plugins[0].NewMusicTrackRecordCount);
+        Assert.Equal(1, estimate.Plugins[0].NewSupportRecordCount);
+        Assert.Equal(4095, estimate.Plugins[0].NewRecordCount);
+        Assert.Equal(1, estimate.Plugins[1].NewMusicTrackRecordCount);
+        Assert.Equal(0, estimate.Plugins[1].NewSupportRecordCount);
     }
 
     [Fact]
@@ -107,8 +127,8 @@ public sealed class MusicGenerationCapacityTests
             estimate.NewMusicTrackRecordCount,
             estimate.Plugins.Sum(plugin => plugin.NewMusicTrackRecordCount));
         Assert.Equal(4097, estimate.NewRecordCount);
-        Assert.Equal(4095, estimate.Plugins[0].NewMusicTrackRecordCount);
-        Assert.Equal(1, estimate.Plugins[1].NewMusicTrackRecordCount);
+        Assert.Equal(4094, estimate.Plugins[0].NewMusicTrackRecordCount);
+        Assert.Equal(2, estimate.Plugins[1].NewMusicTrackRecordCount);
     }
 
     [Fact]

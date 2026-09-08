@@ -3,7 +3,6 @@ using System.Text.Json;
 using GfMusicManager.Core.Analysis;
 using GfMusicManager.Core.Generation;
 using GfMusicManager.Core.Planning;
-using Microsoft.Data.Sqlite;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
@@ -17,6 +16,92 @@ namespace GfMusicManager.Core.Tests;
 
 public sealed class MusicGenerationOutputWriterTests
 {
+    [Fact]
+    public void Generate_RejectsDisabledSourcePluginThatRemainsAsConditionMaster()
+    {
+        var root = Directory.CreateTempSubdirectory("gf-music-disabled-condition-master-");
+        try
+        {
+            var audioPath = Path.Combine(root.FullName, "Disabled Music", "music", "track.xwm");
+            Directory.CreateDirectory(Path.GetDirectoryName(audioPath)!);
+            File.WriteAllBytes(audioPath, [1, 2, 3]);
+            var asset = new AssetSource(
+                @"music\track.xwm",
+                AssetSourceKind.Loose,
+                "Disabled Music",
+                Path.Combine(root.FullName, "Disabled Music"),
+                false,
+                audioPath,
+                null,
+                3);
+            var plugin = new PluginSource(
+                "DisabledCondition.esp",
+                Path.Combine(root.FullName, "Disabled Music", "DisabledCondition.esp"),
+                "Disabled Music",
+                Path.Combine(root.FullName, "Disabled Music"),
+                false,
+                false,
+                -1,
+                10);
+            var musicTypeRecord = new PluginRecordSource(
+                "000100:DisabledCondition.esp",
+                "MusicType",
+                "MUSDisabledCondition",
+                false,
+                plugin,
+                true);
+            var setting = new MusicSettingSource(
+                MusicSettingScope.MusicType,
+                musicTypeRecord.FormKey,
+                musicTypeRecord.EditorId,
+                musicTypeRecord.FormKey,
+                musicTypeRecord.EditorId,
+                musicTypeRecord,
+                musicTypeRecord,
+                Array.Empty<MusicTrackSource>());
+            var condition = new MusicConditionSource(
+                "GetCombatTargetHasKeyword",
+                "EqualTo",
+                1f,
+                string.Empty,
+                "GetCombatTargetHasKeywordConditionData",
+                "Keyword=000200:DisabledCondition.esp")
+            {
+                KeywordFormKey = "000200:DisabledCondition.esp"
+            };
+            var plan = new MusicGenerationPlan { KeepVanillaMusic = false };
+            plan.GetOrCreatePrepared(
+                asset,
+                new[] { setting },
+                new[]
+                {
+                    new MusicGenerationTrackPlan(
+                        "Track_DisabledConditionMaster",
+                        new[] { condition })
+                });
+            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
+
+            var exception = Assert.Throws<MusicGenerationOutputException>(() =>
+                new MusicGenerationOutputWriter().Generate(
+                    plan,
+                    new[] { setting },
+                    new MusicGenerationOutputOptions
+                    {
+                        OutputModDirectory = outputDirectory
+                    }));
+
+            Assert.Contains("DisabledCondition.esp", exception.Message, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(outputDirectory));
+            Assert.Empty(Directory.GetDirectories(
+                root.FullName,
+                "GF Music Product.generating-*"));
+        }
+        finally
+        {
+            DeleteDirectory(root.FullName);
+        }
+    }
+
     [Fact]
     public void Generate_WritesFinaleFilenameOnPrimaryTrackWithoutStandaloneFinaleTrack()
     {
@@ -72,6 +157,101 @@ public sealed class MusicGenerationOutputWriterTests
             var generatedTrack = Assert.Single(generatedPlugin.MusicTracks.Records);
             Assert.Equal(@"music\main.xwm", generatedTrack.TrackFilename?.GivenPath);
             Assert.Equal(@"music\Silence.wav", generatedTrack.FinaleFilename?.GivenPath);
+        }
+        finally
+        {
+            DeleteDirectory(root.FullName);
+        }
+    }
+
+    [Fact]
+    public void Generate_MissingAudioIncludesSourceContextAndLeavesStagingUncommitted()
+    {
+        var root = Directory.CreateTempSubdirectory("gf-music-generation-missing-audio-");
+        try
+        {
+            var virtualPath = @"music\missing.xwm";
+            var asset = new AssetSource(
+                virtualPath,
+                AssetSourceKind.Loose,
+                "Broken Music",
+                Path.Combine(root.FullName, "Broken Music"),
+                true,
+                Path.Combine(root.FullName, "Broken Music", "music", "missing.xwm"),
+                null,
+                null);
+            var setting = CreateMusicTypeSetting(root.FullName, "MUSExploreFixture");
+            var plan = new MusicGenerationPlan { KeepVanillaMusic = false };
+            plan.GetOrCreatePrepared(
+                asset,
+                new[] { setting },
+                new[] { new MusicGenerationTrackPlan("Track_Broken") });
+
+            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
+            var exception = Assert.Throws<MusicGenerationOutputException>(() =>
+                new MusicGenerationOutputWriter().Generate(
+                    plan,
+                    new[] { setting },
+                    new MusicGenerationOutputOptions
+                    {
+                        OutputModDirectory = outputDirectory
+                    }));
+
+            Assert.Contains("MOD: Broken Music", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("Track: Track_Broken", exception.Message, StringComparison.Ordinal);
+            Assert.Contains($"VirtualPath: {virtualPath}", exception.Message, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(outputDirectory));
+            Assert.Empty(Directory.GetDirectories(
+                root.FullName,
+                "GF Music Product.generating-*"));
+        }
+        finally
+        {
+            DeleteDirectory(root.FullName);
+        }
+    }
+
+    [Fact]
+    public void Generate_InvalidConditionIncludesOnlyItsTrackContext()
+    {
+        var root = Directory.CreateTempSubdirectory("gf-music-generation-condition-context-");
+        try
+        {
+            var assetPath = Path.Combine(root.FullName, "Music Mod", "music", "fixture.xwm");
+            Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
+            File.WriteAllBytes(assetPath, [1, 2, 3]);
+            var asset = CreateLooseAsset(root.FullName, "Music Mod", assetPath, @"music\fixture.xwm");
+            var setting = CreateMusicTypeSetting(root.FullName, "MUSExploreFixture");
+            var invalidCondition = new MusicConditionSource(
+                "UnknownFunction",
+                "EqualTo",
+                1f,
+                string.Empty,
+                "UnknownConditionData",
+                string.Empty);
+            var plan = new MusicGenerationPlan { KeepVanillaMusic = false };
+            plan.GetOrCreatePrepared(
+                asset,
+                new[] { setting },
+                new[]
+                {
+                    new MusicGenerationTrackPlan("Track_Bad", new[] { invalidCondition }),
+                    new MusicGenerationTrackPlan("Track_Good")
+                });
+
+            var exception = Assert.Throws<MusicGenerationOutputException>(() =>
+                new MusicGenerationOutputWriter().Generate(
+                    plan,
+                    new[] { setting },
+                    new MusicGenerationOutputOptions
+                    {
+                        OutputModDirectory = Path.Combine(root.FullName, "GF Music Product")
+                    }));
+
+            Assert.Contains("MOD: Music Mod", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("Track: Track_Bad", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("VirtualPath: music\\fixture.xwm", exception.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("Track_Good", exception.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -223,118 +403,6 @@ public sealed class MusicGenerationOutputWriterTests
             var manifest = File.ReadAllText(result.ManifestPath, Encoding.UTF8);
             Assert.Contains("WorldSpaceIndividualAssignment", manifest);
             Assert.Contains("000100:Fixture.esp", manifest);
-        }
-        finally
-        {
-            DeleteDirectory(root.FullName);
-        }
-    }
-
-    [Fact]
-    public void Generate_DfgModeUsesSharedCommonOutputAndDfgTrackTypeOutput()
-    {
-        var root = Directory.CreateTempSubdirectory("gf-music-generation-dfg-hybrid-");
-        try
-        {
-            var assetPath = Path.Combine(root.FullName, "Music Mod", "music", "fixture.xwm");
-            Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
-            File.WriteAllBytes(assetPath, [1, 2, 3, 4]);
-            var asset = CreateLooseAsset(root.FullName, "Music Mod", assetPath, @"music\fixture.xwm");
-            var setting = CreateMusicTypeSetting(root.FullName, "MUSExploreFixture");
-            var plan = new MusicGenerationPlan { KeepVanillaMusic = false };
-            plan.GetOrCreate(asset, new[] { setting });
-
-            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
-            var result = new MusicGenerationOutputWriter().Generate(
-                plan,
-                new[] { setting },
-                new MusicGenerationOutputOptions
-                {
-                    OutputModDirectory = outputDirectory,
-                    OutputMode = MusicGenerationOutputMode.Dfg,
-                    DfgPackageName = "GF Music Manager DFG",
-                    ExistingMtdFileNames = Array.Empty<string>()
-                });
-
-            Assert.True(result.Diagnostic.IsSuccess, result.Diagnostic.Details);
-            Assert.Contains(
-                result.Diagnostic.Checks,
-                check => check.StartsWith("DFG:", StringComparison.Ordinal));
-            Assert.Equal(MusicGenerationOutputMode.Dfg, result.OutputMode);
-            Assert.Empty(result.Tracks);
-            Assert.Empty(result.Plugins);
-            Assert.Single(result.Assets);
-            Assert.True(File.Exists(Path.Combine(outputDirectory, @"music\fixture.xwm")));
-            Assert.True(File.Exists(result.MtdFilePath));
-            Assert.NotNull(result.DfgOutput);
-            Assert.Equal(1, result.DfgOutput!.MusicTrackCount);
-            Assert.Equal(1, result.DfgOutput.MusicTypeCount);
-            Assert.Equal(1, result.DfgOutput.ExternalMusicTypePatchCount);
-            Assert.True(File.Exists(result.DfgOutput.PackageDatabasePath));
-            Assert.Single(result.DfgOutput.ImportPaths);
-            Assert.Empty(Directory.EnumerateFiles(outputDirectory, "*.esp", SearchOption.AllDirectories));
-
-            var manifest = System.Text.Json.JsonSerializer.Deserialize<MusicGenerationManifest>(
-                File.ReadAllText(result.ManifestPath));
-            Assert.NotNull(manifest);
-            Assert.Equal(MusicGenerationOutputMode.Dfg, manifest!.OutputMode);
-            Assert.False(string.IsNullOrWhiteSpace(manifest.DfgPackageDirectory));
-        }
-        finally
-        {
-            DeleteDirectory(root.FullName);
-        }
-    }
-
-    [Fact]
-    public void Generate_DfgOverwriteRemovesPreviousStaticMusicTracks()
-    {
-        var root = Directory.CreateTempSubdirectory("gf-music-generation-dfg-overwrite-");
-        try
-        {
-            var assetPath = Path.Combine(root.FullName, "Music Mod", "music", "fixture.xwm");
-            Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
-            File.WriteAllBytes(assetPath, [1, 2, 3]);
-            var asset = CreateLooseAsset(root.FullName, "Music Mod", assetPath, @"music\fixture.xwm");
-            var setting = CreateMusicTypeSetting(root.FullName, "MUSExploreFixture");
-            var plan = new MusicGenerationPlan { KeepVanillaMusic = false };
-            plan.GetOrCreate(asset, new[] { setting });
-            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
-
-            var normalResult = new MusicGenerationOutputWriter().Generate(
-                plan,
-                new[] { setting },
-                new MusicGenerationOutputOptions
-                {
-                    OutputModDirectory = outputDirectory,
-                    OverwriteExisting = true
-                });
-            Assert.True(normalResult.Diagnostic.IsSuccess, normalResult.Diagnostic.Details);
-            using (var normalPlugin = SkyrimMod.CreateFromBinaryOverlay(
-                       new ModPath(
-                           ModKey.FromNameAndExtension("GF Music Product.esp"),
-                           Path.Combine(outputDirectory, "GF Music Product.esp")),
-                       SkyrimRelease.SkyrimSE))
-            {
-                Assert.Single(normalPlugin.MusicTracks.Records);
-            }
-
-            var dfgResult = new MusicGenerationOutputWriter().Generate(
-                plan,
-                new[] { setting },
-                new MusicGenerationOutputOptions
-                {
-                    OutputModDirectory = outputDirectory,
-                    OutputMode = MusicGenerationOutputMode.Dfg,
-                    DfgPackageName = "GF Music Manager DFG",
-                    OverwriteExisting = true
-                });
-
-            Assert.True(dfgResult.Diagnostic.IsSuccess, dfgResult.Diagnostic.Details);
-            Assert.NotNull(dfgResult.DfgOutput);
-            Assert.Equal(1, dfgResult.DfgOutput!.MusicTrackCount);
-            Assert.Empty(dfgResult.Plugins);
-            Assert.Empty(Directory.EnumerateFiles(outputDirectory, "*.esp", SearchOption.AllDirectories));
         }
         finally
         {
@@ -659,7 +727,35 @@ public sealed class MusicGenerationOutputWriterTests
                 MusicConditionSource.CreateCurrentTime(22f, "GreaterThanOrEqualTo", "OR"),
                 MusicConditionSource.CreateCurrentTime(5f, "LessThanOrEqualTo", "OR"),
                 MusicConditionSource.CreateCombatKeyword(dragonKeyword, hasKeyword: true),
-                MusicConditionSource.CreateCurrentWeather(rainWeather, matches: false)
+                MusicConditionSource.CreateCurrentWeather(rainWeather, matches: false),
+                new MusicConditionSource(
+                    "GetInCurrentLoc",
+                    "EqualTo",
+                    1f,
+                    string.Empty,
+                    "GetInCurrentLocConditionData",
+                    string.Empty)
+                {
+                    LocationFormKey = "0128FE:Dawnguard.esm"
+                },
+                new MusicConditionSource(
+                    "GetInWorldspace", "EqualTo", 1f, string.Empty,
+                    "GetInWorldspaceConditionData", string.Empty)
+                {
+                    WorldspaceOrListFormKey = "00003C:Skyrim.esm"
+                },
+                new MusicConditionSource(
+                    "GetInCurrentLocFormList", "EqualTo", 1f, string.Empty,
+                    "GetInCurrentLocFormListConditionData", string.Empty)
+                {
+                    FormListFormKey = "000123:Skyrim.esm"
+                },
+                new MusicConditionSource(
+                    "GetQuestCompleted", "EqualTo", 1f, string.Empty,
+                    "GetQuestCompletedConditionData", string.Empty)
+                {
+                    QuestFormKey = "000337:Skyrim.esm"
+                }
             };
             var plan = new MusicGenerationPlan
             {
@@ -679,7 +775,7 @@ public sealed class MusicGenerationOutputWriterTests
             Assert.True(result.Diagnostic.IsSuccess, result.Diagnostic.Details);
             Assert.Contains(
                 result.Diagnostic.Checks,
-                check => check.Contains("再生条件4件が一致", StringComparison.Ordinal));
+                check => check.Contains("再生条件8件が一致", StringComparison.Ordinal));
 
             var generatedPluginPath = Path.Combine(outputDirectory, "GF Music Product.esp");
             var generatedRecords = new PluginRecordScanner().Read(new PluginSource(
@@ -708,6 +804,21 @@ public sealed class MusicGenerationOutputWriterTests
             var weather = Assert.Single(actualConditions.Where(condition =>
                 condition.FunctionName == "GetIsCurrentWeather"));
             Assert.Equal("000805:Skyrim.esm", weather.WeatherFormKey);
+            var location = Assert.Single(actualConditions.Where(condition =>
+                condition.FunctionName == "GetInCurrentLoc"));
+            Assert.Equal("0128FE:Dawnguard.esm", location.LocationFormKey);
+            Assert.Equal(
+                "00003C:Skyrim.esm",
+                Assert.Single(actualConditions.Where(condition =>
+                    condition.FunctionName == "GetInWorldspace")).WorldspaceOrListFormKey);
+            Assert.Equal(
+                "000123:Skyrim.esm",
+                Assert.Single(actualConditions.Where(condition =>
+                    condition.FunctionName == "GetInCurrentLocFormList")).FormListFormKey);
+            Assert.Equal(
+                "000337:Skyrim.esm",
+                Assert.Single(actualConditions.Where(condition =>
+                    condition.FunctionName == "GetQuestCompleted")).QuestFormKey);
 
             var mismatchedTracks = result.Tracks
                 .Select(track => track with
@@ -932,151 +1043,6 @@ public sealed class MusicGenerationOutputWriterTests
                 warning => warning.Contains(
                     "統合用Music Type",
                     StringComparison.Ordinal));
-        }
-        finally
-        {
-            DeleteDirectory(root.FullName);
-        }
-    }
-
-    [Fact]
-    public void Generate_DfgCellConflictKeepsBridgeTypeInEspAndPatchesItWithDfgTracks()
-    {
-        var root = Directory.CreateTempSubdirectory("gf-music-cell-conflict-dfg-");
-        try
-        {
-            var firstPath = Path.Combine(root.FullName, "First Music", "music", "first.xwm");
-            var secondPath = Path.Combine(root.FullName, "Second Music", "music", "second.xwm");
-            Directory.CreateDirectory(Path.GetDirectoryName(firstPath)!);
-            Directory.CreateDirectory(Path.GetDirectoryName(secondPath)!);
-            File.WriteAllBytes(firstPath, [1]);
-            File.WriteAllBytes(secondPath, [2]);
-
-            var firstMusicType = CreateMusicTypeSetting(root.FullName, "MUSCellFirst");
-            var firstCellRecord = firstMusicType.Record with
-            {
-                FormKey = "000200:Fixture.esp",
-                RecordType = "Cell",
-                EditorId = "Cell_Fixture"
-            };
-            var firstCell = firstMusicType with
-            {
-                Scope = MusicSettingScope.Cell,
-                ScopeFormKey = firstCellRecord.FormKey,
-                ScopeEditorId = firstCellRecord.EditorId,
-                Record = firstCellRecord
-            };
-
-            var secondMusicType = CreateMusicTypeSetting(
-                root.FullName,
-                "MUSCellSecond",
-                "Second.esp",
-                2,
-                true,
-                "000101:Second.esp");
-            var secondCellRecord = secondMusicType.Record with
-            {
-                FormKey = firstCellRecord.FormKey,
-                RecordType = "Cell",
-                EditorId = firstCellRecord.EditorId
-            };
-            var secondCell = secondMusicType with
-            {
-                Scope = MusicSettingScope.Cell,
-                ScopeFormKey = secondCellRecord.FormKey,
-                ScopeEditorId = secondCellRecord.EditorId,
-                Record = secondCellRecord
-            };
-
-            var plan = new MusicGenerationPlan
-            {
-                KeepVanillaMusic = false
-            };
-            plan.GetOrCreate(
-                CreateLooseAsset(root.FullName, "First Music", firstPath, @"music\first.xwm"),
-                new[] { firstCell });
-            plan.GetOrCreate(
-                CreateLooseAsset(root.FullName, "Second Music", secondPath, @"music\second.xwm"),
-                new[] { secondCell });
-
-            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
-            var result = new MusicGenerationOutputWriter().Generate(
-                plan,
-                new[] { firstCell, secondCell },
-                new MusicGenerationOutputOptions
-                {
-                    OutputModDirectory = outputDirectory,
-                    OutputMode = MusicGenerationOutputMode.Dfg,
-                    DfgPackageName = "GF Music Manager DFG"
-                });
-
-            Assert.True(result.Diagnostic.IsSuccess, result.Diagnostic.Details);
-            var plugin = Assert.Single(result.Plugins);
-            Assert.Equal(0, plugin.NewMusicTrackRecordCount);
-            Assert.Equal(1, plugin.NewMusicTypeRecordCount);
-            Assert.Empty(result.Tracks);
-
-            var integratedMusicType = Assert.Single(result.IntegratedMusicTypes);
-            Assert.Empty(integratedMusicType.TrackFormKeys);
-            var cell = Assert.Single(result.Cells);
-            Assert.Equal(integratedMusicType.MusicTypeFormKey, cell.MusicTypeFormKey);
-            var cellPatcher = File.ReadAllText(result.CellSkyPatcherFilePath!, Encoding.UTF8);
-            var integratedFormKey = FormKey.Factory(integratedMusicType.MusicTypeFormKey);
-            Assert.Contains(
-                $"musicType=GF Music Product.esp|{integratedFormKey.ID:X6}",
-                cellPatcher,
-                StringComparison.OrdinalIgnoreCase);
-
-            using var generatedPlugin = SkyrimMod.CreateFromBinaryOverlay(
-                new ModPath(
-                    ModKey.FromNameAndExtension("GF Music Product.esp"),
-                    Path.Combine(outputDirectory, "GF Music Product.esp")),
-                SkyrimRelease.SkyrimSE);
-            Assert.Empty(generatedPlugin.MusicTracks.Records);
-            Assert.Single(generatedPlugin.MusicTypes.Records);
-
-            Assert.NotNull(result.DfgOutput);
-            Assert.Equal(2, result.DfgOutput!.MusicTrackCount);
-            Assert.Equal(3, result.DfgOutput.MusicTypeCount);
-            Assert.Equal(3, result.DfgOutput.ExternalMusicTypePatchCount);
-
-            var importedTrackIds = result.DfgOutput.ImportPaths
-                .Select(path => JsonDocument.Parse(File.ReadAllText(path)))
-                .Select(document =>
-                {
-                    using (document)
-                    {
-                        return document.RootElement
-                            .GetProperty("editorId")
-                            .GetString()!;
-                    }
-                })
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var bridgePatch = ReadDfgPatches(result.DfgOutput.PackageDatabasePath)
-                .Single(patch =>
-                    patch.SourcePlugin.Equals(
-                        "GF Music Product.esp",
-                        StringComparison.OrdinalIgnoreCase) &&
-                    patch.LocalFormId == integratedFormKey.ID);
-            using var changes = JsonDocument.Parse(bridgePatch.ChangesJson);
-            var references = changes.RootElement
-                .GetProperty("fields")
-                .GetProperty("musicTypeTracks")
-                .GetProperty("value")
-                .EnumerateArray()
-                .ToArray();
-            Assert.Equal("replace", changes.RootElement
-                .GetProperty("fields")
-                .GetProperty("musicTypeTracks")
-                .GetProperty("operation")
-                .GetString());
-            Assert.Equal(2, references.Length);
-            Assert.All(references, reference =>
-            {
-                Assert.True(reference.TryGetProperty("editorID", out var editorId));
-                Assert.False(reference.TryGetProperty("formID", out _));
-                Assert.Contains(editorId.GetString()!, importedTrackIds);
-            });
         }
         finally
         {
@@ -1444,103 +1410,6 @@ public sealed class MusicGenerationOutputWriterTests
     }
 
     [Fact]
-    public void Generate_DfgWorldSpaceKeepsBridgeTypeInEspAndPatchesItWithDfgTracks()
-    {
-        var root = Directory.CreateTempSubdirectory("gf-music-worldspace-dfg-");
-        try
-        {
-            var pluginPath = Path.Combine(root.FullName, "Music Fixture.esp");
-            var sourceFormKey = WriteWorldSpaceSourcePlugin(pluginPath);
-            var assetPath = Path.Combine(root.FullName, "Music Mod", "music", "fixture.xwm");
-            Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
-            File.WriteAllBytes(assetPath, [9, 8, 7]);
-            var asset = CreateLooseAsset(root.FullName, "Music Mod", assetPath, @"music\fixture.xwm");
-            var setting = CreateWorldSpaceSetting(root.FullName, pluginPath, sourceFormKey);
-            var plan = new MusicGenerationPlan
-            {
-                KeepVanillaMusic = false
-            };
-            plan.GetOrCreate(asset, new[] { setting });
-
-            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
-            var result = new MusicGenerationOutputWriter().Generate(
-                plan,
-                new[] { setting },
-                new MusicGenerationOutputOptions
-                {
-                    OutputModDirectory = outputDirectory,
-                    OutputMode = MusicGenerationOutputMode.Dfg,
-                    DfgPackageName = "GF Music Manager DFG",
-                    WorldSpaceIndividualAssignment = true,
-                    SelectedWorldSpaceFormKeys = new HashSet<string>(
-                        new[] { sourceFormKey },
-                        StringComparer.OrdinalIgnoreCase)
-                });
-
-            Assert.True(result.Diagnostic.IsSuccess, result.Diagnostic.Details);
-            var plugin = Assert.Single(result.Plugins);
-            Assert.Equal(0, plugin.NewMusicTrackRecordCount);
-            Assert.Equal(1, plugin.NewMusicTypeRecordCount);
-            Assert.Empty(result.Tracks);
-
-            var worldSpace = Assert.Single(result.WorldSpaces);
-            Assert.Empty(worldSpace.TrackFormKeys);
-            using var generatedPlugin = SkyrimMod.CreateFromBinaryOverlay(
-                new ModPath(
-                    ModKey.FromNameAndExtension("GF Music Product.esp"),
-                    Path.Combine(outputDirectory, "GF Music Product.esp")),
-                SkyrimRelease.SkyrimSE);
-            Assert.Empty(generatedPlugin.MusicTracks.Records);
-            var generatedType = Assert.Single(generatedPlugin.MusicTypes.Records);
-            Assert.Equal(worldSpace.MusicTypeFormKey, generatedType.FormKey.ToString());
-            Assert.Equal(sourceFormKey, Assert.Single(generatedPlugin.Worldspaces.Records).FormKey.ToString());
-
-            Assert.NotNull(result.DfgOutput);
-            Assert.Equal(1, result.DfgOutput!.MusicTrackCount);
-            Assert.Equal(2, result.DfgOutput.MusicTypeCount);
-            Assert.Equal(2, result.DfgOutput.ExternalMusicTypePatchCount);
-
-            var importedTrackIds = result.DfgOutput.ImportPaths
-                .Select(path => JsonDocument.Parse(File.ReadAllText(path)))
-                .Select(document =>
-                {
-                    using (document)
-                    {
-                        return document.RootElement.GetProperty("editorId").GetString()!;
-                    }
-                })
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var worldSpaceFormKey = FormKey.Factory(worldSpace.MusicTypeFormKey);
-            var bridgePatch = ReadDfgPatches(result.DfgOutput.PackageDatabasePath)
-                .Single(patch =>
-                    patch.SourcePlugin.Equals(
-                        "GF Music Product.esp",
-                        StringComparison.OrdinalIgnoreCase) &&
-                    patch.LocalFormId == worldSpaceFormKey.ID);
-            using var changes = JsonDocument.Parse(bridgePatch.ChangesJson);
-            var references = changes.RootElement
-                .GetProperty("fields")
-                .GetProperty("musicTypeTracks")
-                .GetProperty("value")
-                .EnumerateArray()
-                .ToArray();
-            Assert.Equal("replace", changes.RootElement
-                .GetProperty("fields")
-                .GetProperty("musicTypeTracks")
-                .GetProperty("operation")
-                .GetString());
-            var reference = Assert.Single(references);
-            Assert.True(reference.TryGetProperty("editorID", out var editorId));
-            Assert.False(reference.TryGetProperty("formID", out _));
-            Assert.Contains(editorId.GetString()!, importedTrackIds);
-        }
-        finally
-        {
-            DeleteDirectory(root.FullName);
-        }
-    }
-
-    [Fact]
     public void Generate_LeavesWorldSpaceAssignmentUntouchedWhenWorldSpaceOutputIsOff()
     {
         var root = Directory.CreateTempSubdirectory("gf-music-worldspace-conflict-off-");
@@ -1708,7 +1577,7 @@ public sealed class MusicGenerationOutputWriterTests
     }
 
     [Fact]
-    public void Generate_RejectsTwoAdoptedAssetsWithTheSameVirtualPath()
+    public void Generate_SeparatesTwoAdoptedAssetsWithTheSameVirtualPath()
     {
         var root = Directory.CreateTempSubdirectory("gf-music-generation-duplicate-");
         try
@@ -1724,23 +1593,51 @@ public sealed class MusicGenerationOutputWriterTests
             {
                 KeepVanillaMusic = true
             };
-            plan.GetOrCreate(
-                CreateLooseAsset(root.FullName, "First", firstPath, @"music\same.xwm"),
+            var winner = plan.GetOrCreate(
+                CreateLooseAsset(root.FullName, "First", firstPath, @"music\same.xwm") with
+                {
+                    IsVfsWinner = true
+                },
                 new[] { setting });
             plan.GetOrCreate(
                 CreateLooseAsset(root.FullName, "Second", secondPath, @"music\same.xwm"),
                 new[] { setting });
 
             var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
-            Assert.Throws<MusicGenerationOutputException>(() =>
-                new MusicGenerationOutputWriter().Generate(
-                    plan,
-                    new[] { setting },
-                    new MusicGenerationOutputOptions
-                    {
-                        OutputModDirectory = outputDirectory
-                    }));
-            Assert.False(Directory.Exists(outputDirectory));
+            var result = new MusicGenerationOutputWriter().Generate(
+                plan,
+                new[] { setting },
+                new MusicGenerationOutputOptions
+                {
+                    OutputModDirectory = outputDirectory
+                });
+
+            Assert.True(result.Diagnostic.IsSuccess, result.Diagnostic.Details);
+            Assert.Equal(2, result.Tracks.Count);
+            Assert.Equal(2, result.Assets.Count);
+            var winnerOutput = Assert.Single(result.Assets.Where(asset =>
+                asset.SourcePath.Equals(firstPath, StringComparison.OrdinalIgnoreCase)));
+            var copiedOutput = Assert.Single(result.Assets.Where(asset =>
+                asset.SourcePath.Equals(secondPath, StringComparison.OrdinalIgnoreCase)));
+            Assert.False(winnerOutput.IsCopied);
+            Assert.Equal(@"music\same.xwm", winnerOutput.VirtualPath);
+            Assert.Null(winnerOutput.OutputPath);
+            Assert.True(copiedOutput.IsCopied);
+            Assert.NotEqual(winnerOutput.VirtualPath, copiedOutput.VirtualPath);
+            Assert.StartsWith(
+                MusicGenerationAssetPathMap.ManagedDuplicatePathRoot,
+                copiedOutput.VirtualPath,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(copiedOutput.VirtualPath, copiedOutput.OutputPath);
+            Assert.True(File.Exists(Path.Combine(
+                outputDirectory,
+                copiedOutput.OutputPath!.Replace('\\', Path.DirectorySeparatorChar))));
+            Assert.Equal(
+                winnerOutput.VirtualPath,
+                result.Tracks.Single(track => track.AssetKey == winner.AssetKey).VirtualPath);
+            Assert.Equal(
+                copiedOutput.VirtualPath,
+                result.Tracks.Single(track => track.AssetKey != winner.AssetKey).VirtualPath);
         }
         finally
         {
@@ -1786,6 +1683,94 @@ public sealed class MusicGenerationOutputWriterTests
             var assetOutput = Assert.Single(result.Assets);
             Assert.Equal(firstPath, assetOutput.SourcePath);
             Assert.True(assetOutput.IsCopied);
+        }
+        finally
+        {
+            DeleteDirectory(root.FullName);
+        }
+    }
+
+    [Fact]
+    public void Generate_SeparatesThreeSamePathSourcesWithSameModNamesAndStablePaths()
+    {
+        var root = Directory.CreateTempSubdirectory("gf-music-generation-duplicate-three-");
+        try
+        {
+            var setting = CreateMusicTypeSetting(root.FullName, "MUSExploreFixture");
+            var virtualPath = @"music\same-file.xwm";
+            var longModName = new string('X', 300) + "<>:*?";
+            var plans = new MusicGenerationPlan { KeepVanillaMusic = false };
+            foreach (var modDirectory in new[] { "First", "Second", "Third" })
+            {
+                var sourcePath = Path.Combine(
+                    root.FullName,
+                    modDirectory,
+                    "music",
+                    "same-file.xwm");
+                Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
+                File.WriteAllBytes(sourcePath, [1, 2, 3]);
+                var asset = CreateLooseAsset(
+                    root.FullName,
+                    modDirectory,
+                    sourcePath,
+                    virtualPath) with
+                {
+                    ModName = longModName,
+                    IsVfsWinner = modDirectory.Equals(
+                        "First",
+                        StringComparison.OrdinalIgnoreCase)
+                };
+                plans.GetOrCreate(asset, new[] { setting });
+            }
+
+            var outputDirectory = Path.Combine(root.FullName, "GF Music Product");
+            var writer = new MusicGenerationOutputWriter();
+            var first = writer.Generate(
+                plans,
+                new[] { setting },
+                new MusicGenerationOutputOptions
+                {
+                    OutputModDirectory = outputDirectory
+                });
+
+            Assert.True(first.Diagnostic.IsSuccess, first.Diagnostic.Details);
+            Assert.Equal(3, first.Assets.Count);
+            Assert.Equal(3, first.Tracks.Count);
+            Assert.Single(first.Assets.Where(asset => !asset.IsCopied));
+            var firstPaths = first.Assets
+                .ToDictionary(asset => asset.AssetKey, asset => asset.VirtualPath);
+            var copiedPaths = first.Assets
+                .Where(asset => asset.IsCopied)
+                .Select(asset => asset.VirtualPath)
+                .ToArray();
+            Assert.Equal(2, copiedPaths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.All(copiedPaths, path =>
+            {
+                Assert.StartsWith(
+                    MusicGenerationAssetPathMap.ManagedDuplicatePathRoot,
+                    path,
+                    StringComparison.OrdinalIgnoreCase);
+                Assert.True(path.Length <= 240);
+                Assert.DoesNotContain('<', path);
+                Assert.DoesNotContain('>', path);
+                Assert.DoesNotContain(':', path);
+                Assert.DoesNotContain('*', path);
+                Assert.DoesNotContain('?', path);
+            });
+
+            var second = writer.Generate(
+                plans,
+                new[] { setting },
+                new MusicGenerationOutputOptions
+                {
+                    OutputModDirectory = outputDirectory,
+                    OverwriteExisting = true
+                });
+
+            Assert.True(second.Diagnostic.IsSuccess, second.Diagnostic.Details);
+            var secondPaths = second.Assets
+                .ToDictionary(asset => asset.AssetKey, asset => asset.VirtualPath);
+            Assert.Equal(firstPaths, secondPaths);
         }
         finally
         {
@@ -2036,37 +2021,6 @@ public sealed class MusicGenerationOutputWriterTests
         return worldSpace.FormKey.ToString();
     }
 
-    private static IReadOnlyList<DfgPatchRow> ReadDfgPatches(string databasePath)
-    {
-        var connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Pooling = false
-        }.ToString();
-        using var connection = new SqliteConnection(connectionString);
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT source_plugin, local_form_id, form_kind, editor_id, changes_json
-            FROM external_patches
-            ORDER BY source_plugin, local_form_id, form_kind;
-            """;
-        using var reader = command.ExecuteReader();
-        var result = new List<DfgPatchRow>();
-        while (reader.Read())
-        {
-            result.Add(new DfgPatchRow(
-                reader.GetString(0),
-                reader.GetInt64(1),
-                reader.GetString(2),
-                reader.GetString(3),
-                reader.GetString(4)));
-        }
-
-        return result;
-    }
-
     private static void DeleteDirectory(string path)
     {
         try
@@ -2081,13 +2035,6 @@ public sealed class MusicGenerationOutputWriterTests
             // Temporary test data can be collected by the OS later.
         }
     }
-
-    private sealed record DfgPatchRow(
-        string SourcePlugin,
-        long LocalFormId,
-        string FormKind,
-        string EditorId,
-        string ChangesJson);
 
     private sealed class BsaFixture
     {

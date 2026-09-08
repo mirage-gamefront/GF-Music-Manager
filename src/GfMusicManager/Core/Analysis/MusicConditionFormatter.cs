@@ -387,6 +387,9 @@ public static class MusicConditionFormatter
               (string.IsNullOrWhiteSpace(condition.WeatherDefinitionPluginName)
                   ? string.Empty
                   : $" / WeatherPlugin={condition.WeatherDefinitionPluginName}");
+        var locationDetails = string.IsNullOrWhiteSpace(condition.LocationFormKey)
+            ? string.Empty
+            : $" / Location={condition.LocationFormKey}";
         var executionDetails =
             $" / ValueType={condition.ComparisonValueType}" +
             $" / RunOn={condition.RunOnType}" +
@@ -405,7 +408,8 @@ public static class MusicConditionFormatter
                    ? string.Empty
                    : $" / {condition.DataSummary}") +
                keywordDetails +
-               weatherDetails;
+               weatherDetails +
+               locationDetails;
     }
 
     public static string CreateKey(MusicConditionSource condition)
@@ -429,6 +433,10 @@ public static class MusicConditionFormatter
             condition.DataType,
             condition.KeywordFormKey ?? string.Empty,
             condition.WeatherFormKey ?? string.Empty,
+            condition.LocationFormKey ?? string.Empty,
+            condition.WorldspaceOrListFormKey ?? string.Empty,
+            condition.FormListFormKey ?? string.Empty,
+            condition.QuestFormKey ?? string.Empty,
             string.IsNullOrWhiteSpace(condition.ComparisonValueType)
                 ? "Float"
                 : condition.ComparisonValueType,

@@ -194,6 +194,18 @@ public sealed class Mo2ScannerTests
         Assert.Equal(Encoding.ASCII.GetBytes("test"), reader.ReadEntry(fixture.Path, entry.VirtualPath));
     }
 
+    [Fact]
+    public void BsaReader_PreservesSingleByteWesternFileNames()
+    {
+        using var fixture = new BsaFixture("música_track.xwm");
+        var reader = new BsaArchiveReader();
+
+        var archive = reader.ReadIndex(fixture.Path);
+        var entry = Assert.Single(archive.Entries);
+        Assert.Equal("music\\música_track.xwm", entry.VirtualPath);
+        Assert.Equal(Encoding.ASCII.GetBytes("test"), reader.ReadEntry(fixture.Path, entry.VirtualPath));
+    }
+
     private sealed class Mo2Fixture : IDisposable
     {
         public Mo2Fixture()
@@ -210,7 +222,7 @@ public sealed class Mo2ScannerTests
             Directory.CreateDirectory(Path.Combine(disabled, "music", "disabled"));
             File.WriteAllBytes(Path.Combine(enabled, "music", "forest", "loose_track.xwm"), [1, 2, 3]);
             File.WriteAllBytes(Path.Combine(disabled, "music", "disabled", "disabled_track.xwm"), [4, 5, 6]);
-            new BsaFixture(Path.Combine(enabled, "Enabled Music.bsa"));
+            new BsaFixture(path: Path.Combine(enabled, "Enabled Music.bsa"));
 
             File.WriteAllText(
                 Path.Combine(profile, "modlist.txt"),
@@ -279,13 +291,13 @@ public sealed class Mo2ScannerTests
     {
         private static readonly byte[] Payload = Encoding.ASCII.GetBytes("test");
 
-        public BsaFixture(string? path = null)
+        public BsaFixture(string fileName = "archive_track.xwm", string? path = null)
         {
             Path = path ?? System.IO.Path.Combine(
                 Directory.CreateTempSubdirectory("bsa-fixture-").FullName,
                 "fixture.bsa");
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
-            WriteArchive(Path);
+            WriteArchive(Path, fileName);
         }
 
         public string Path { get; }
@@ -306,7 +318,7 @@ public sealed class Mo2ScannerTests
             }
         }
 
-        private static void WriteArchive(string path)
+        private static void WriteArchive(string path, string fileName)
         {
             using var stream = File.Create(path);
             using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
@@ -331,7 +343,7 @@ public sealed class Mo2ScannerTests
             writer.Write((uint)Payload.Length);
             var offsetPosition = stream.Position;
             writer.Write(0u);
-            writer.Write(Encoding.ASCII.GetBytes("archive_track.xwm\0"));
+            writer.Write(Encoding.Latin1.GetBytes(fileName + "\0"));
             var payloadOffset = checked((uint)stream.Position);
             var endOfNames = stream.Position;
             stream.Position = offsetPosition;

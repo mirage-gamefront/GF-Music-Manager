@@ -1,4 +1,5 @@
 using System.Text;
+using GfMusicManager.Core.Localization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -40,7 +41,8 @@ internal static class MusicCellSkyPatcherOutput
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new MusicGenerationOutputException($"{label}のFormIDがありません。");
+            throw new MusicGenerationOutputException(
+                UiText.Format("Generation.Output.FormIdMissing", label));
         }
 
         try
@@ -51,7 +53,7 @@ internal static class MusicCellSkyPatcherOutput
         catch
         {
             throw new MusicGenerationOutputException(
-                $"{label}のFormIDをSkyPatcher形式へ変換できません：{value}");
+                UiText.Format("Generation.Output.FormIdInvalid", label, value));
         }
     }
 }

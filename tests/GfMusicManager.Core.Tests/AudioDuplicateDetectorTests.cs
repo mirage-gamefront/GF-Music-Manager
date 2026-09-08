@@ -109,7 +109,7 @@ public sealed class AudioDuplicateDetectorTests
     }
 
     [Fact]
-    public void DefaultPathConflictSelectionKeepsTheLoadOrderWinnerOnly()
+    public void DefaultPathConflictSelectionIncludesAllSources()
     {
         var first = AssetWithoutFile("Mod A", "music\\shared.xwm", isVfsWinner: false);
         var second = AssetWithoutFile("Mod B", "music\\shared.xwm", isVfsWinner: true);
@@ -125,7 +125,7 @@ public sealed class AudioDuplicateDetectorTests
                 new AudioDuplicateSource(second, "hash-b")
             });
 
-        var winners = AudioDuplicateDefaultSelection.SelectPathConflictWinners(
+        var winners = AudioDuplicateDefaultSelection.SelectPathConflictSources(
             new[] { group },
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
@@ -134,8 +134,8 @@ public sealed class AudioDuplicateDetectorTests
             });
 
         Assert.Contains(MusicGenerationPlanEntry.CreateAssetKey(second), winners);
-        Assert.DoesNotContain(MusicGenerationPlanEntry.CreateAssetKey(first), winners);
-        Assert.Single(winners);
+        Assert.Contains(MusicGenerationPlanEntry.CreateAssetKey(first), winners);
+        Assert.Equal(2, winners.Count);
     }
 
     [Fact]

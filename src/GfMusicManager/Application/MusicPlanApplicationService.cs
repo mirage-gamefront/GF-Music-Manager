@@ -33,7 +33,9 @@ public sealed class MusicPlanApplicationService
         if (duplicateKeys.Length > 0)
         {
             throw new ArgumentException(
-                $"同じ音源を採用と除外の両方に指定しています：{string.Join(", ", duplicateKeys)}");
+                UiText.Format(
+                    "Plan.DuplicateAdoptExclude",
+                    string.Join(UiText.Get("Common.ListSeparator"), duplicateKeys)));
         }
 
         var entries = snapshot.Entries ?? Array.Empty<MusicPlanEntrySnapshot>();
@@ -48,7 +50,9 @@ public sealed class MusicPlanApplicationService
         if (unknownKeys.Length > 0)
         {
             throw new ArgumentException(
-                $"計画に存在しない音源キーです：{string.Join(", ", unknownKeys)}");
+                UiText.Format(
+                    "Plan.UnknownAssetKeys",
+                    string.Join(UiText.Get("Common.ListSeparator"), unknownKeys)));
         }
 
         return snapshot with
@@ -117,7 +121,7 @@ public sealed class MusicPlanApplicationService
             mod => mod.Name,
             mod => mod.Priority,
             StringComparer.OrdinalIgnoreCase);
-        var winners = AudioDuplicateDefaultSelection.SelectPathConflictWinners(
+        var defaultSources = AudioDuplicateDefaultSelection.SelectPathConflictSources(
             duplicates.Groups,
             priorities);
         var changed = 0;
@@ -136,7 +140,7 @@ public sealed class MusicPlanApplicationService
                 continue;
             }
 
-            var shouldAdopt = winners.Contains(entry.AssetKey);
+            var shouldAdopt = defaultSources.Contains(entry.AssetKey);
             if (entry.IsAdopted != shouldAdopt)
             {
                 entry.IsAdopted = shouldAdopt;

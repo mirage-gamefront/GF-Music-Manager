@@ -3,6 +3,13 @@ using SkyrimScan.Core.Models;
 
 namespace GfMusicManager.Core.Planning;
 
+public enum MusicAssetRole
+{
+    Unmapped,
+    Primary,
+    FinaleOnly
+}
+
 /// <summary>
 /// Precomputed relationships for one normalized audio path.  Scan preparation,
 /// the editable generation plan, and WPF rows share this data instead of
@@ -13,18 +20,22 @@ public sealed class MusicAssetBinding
     private readonly IReadOnlyList<MusicGenerationTrackPlan> _trackTemplates;
 
     internal MusicAssetBinding(
+        MusicAssetRole role,
         IReadOnlyList<MusicSettingSource> settings,
         IReadOnlyList<MusicTrackSource> tracks,
         IReadOnlyList<MusicConditionSource> conditions,
         IReadOnlyList<MusicDefinitionConflict> definitionConflicts,
         IReadOnlyList<MusicGenerationTrackPlan> trackTemplates)
     {
+        Role = role;
         Settings = settings;
         Tracks = tracks;
         Conditions = conditions;
         DefinitionConflicts = definitionConflicts;
         _trackTemplates = trackTemplates;
     }
+
+    public MusicAssetRole Role { get; }
 
     public IReadOnlyList<MusicSettingSource> Settings { get; }
 
@@ -59,6 +70,7 @@ public sealed class MusicAssetBinding
 public sealed class MusicAssetBindingIndex
 {
     private static readonly MusicAssetBinding EmptyBinding = new(
+        MusicAssetRole.Unmapped,
         Array.Empty<MusicSettingSource>(),
         Array.Empty<MusicTrackSource>(),
         Array.Empty<MusicConditionSource>(),
@@ -81,39 +93,84 @@ public sealed class MusicAssetBindingIndex
 
         var trackIndexes = BuildTrackIndexes(analysis.Settings);
         var conflictKeysBySetting = BuildConflictKeysBySetting(analysis.Settings);
+        var settingsByTrackKey = analysis.Settings
+            .SelectMany(setting => setting.Tracks.Select(track => new
+            {
+                TrackKey = MusicGenerationTrackKey.Create(track),
+                Setting = setting
+            }))
+            .GroupBy(item => item.TrackKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<MusicSettingSource>)group
+                    .Select(item => item.Setting)
+                    .DistinctBy(CreateSettingIdentity, StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                StringComparer.OrdinalIgnoreCase);
         var bindings = new Dictionary<string, MusicAssetBinding>(
             StringComparer.OrdinalIgnoreCase);
 
-        foreach (var pair in analysis.SettingsByAssetPath)
+        var candidatePaths = (assets?.Select(asset => asset.VirtualPath) ?? Array.Empty<string>())
+            .Concat(analysis.SettingsByAssetPath.Keys)
+            .Concat(analysis.Settings
+                .SelectMany(setting => setting.Tracks)
+                .SelectMany(track => track.MatchingFinaleAudioPaths))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in candidatePaths)
         {
-            var normalizedPath = NormalizePath(pair.Key);
-            var settings = pair.Value;
-            var matchingIdentity = NormalizeIdentity(pair.Key);
+            var matchingIdentity = NormalizeIdentity(path);
             var matchedTrackInfo = trackIndexes.ByAudioIdentity.TryGetValue(
                 matchingIdentity,
                 out var indexedTracks)
                 ? indexedTracks
                 : Array.Empty<TrackInfo>();
-            var tracks = matchedTrackInfo
+            var matchedFinaleTrackInfo = trackIndexes.ByFinaleIdentity.TryGetValue(
+                matchingIdentity,
+                out var indexedFinaleTracks)
+                ? indexedFinaleTracks
+                : Array.Empty<TrackInfo>();
+            var mappedSettings = analysis.GetSettingsForAsset(path);
+            var role = matchedTrackInfo.Count > 0 || mappedSettings.Count > 0
+                ? MusicAssetRole.Primary
+                : matchedFinaleTrackInfo.Count > 0
+                    ? MusicAssetRole.FinaleOnly
+                    : MusicAssetRole.Unmapped;
+            var selectedTrackInfo = role == MusicAssetRole.Primary
+                ? matchedTrackInfo
+                : matchedFinaleTrackInfo;
+            var tracks = selectedTrackInfo
                 .Select(info => info.Track)
+                .DistinctBy(track => MusicGenerationTrackKey.Create(track), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var settings = selectedTrackInfo
+                .SelectMany(info => settingsByTrackKey.TryGetValue(info.TrackKey, out var matchedSettings)
+                    ? matchedSettings
+                    : Array.Empty<MusicSettingSource>())
+                .Concat(mappedSettings)
+                .DistinctBy(CreateSettingIdentity, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             var conditions = tracks
                 .SelectMany(track => track.Conditions)
                 .DistinctBy(MusicConditionFormatter.CreateKey, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            var trackTemplates = matchedTrackInfo
+            var trackTemplates = role == MusicAssetRole.Primary
+                ? matchedTrackInfo
                 .GroupBy(info => info.TrackKey, StringComparer.OrdinalIgnoreCase)
                 .Select(group => MusicGenerationTrackPlanFactory.Create(
                     group.First().Track,
                     assets))
                 .OrderBy(track => track.TrackKey, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+                .ToArray()
+                : Array.Empty<MusicGenerationTrackPlan>();
             var definitionConflicts = ResolveDefinitionConflicts(
                 settings,
                 analysis.DefinitionConflicts,
                 conflictKeysBySetting);
 
-            bindings[normalizedPath] = new MusicAssetBinding(
+            bindings[matchingIdentity] = new MusicAssetBinding(
+                role,
                 settings,
                 tracks,
                 conditions,
@@ -126,8 +183,8 @@ public sealed class MusicAssetBindingIndex
 
     public MusicAssetBinding Get(string virtualPath)
     {
-        var normalizedPath = NormalizePath(virtualPath);
-        return _bindings.TryGetValue(normalizedPath, out var binding)
+        var identity = NormalizeIdentity(virtualPath);
+        return _bindings.TryGetValue(identity, out var binding)
             ? binding
             : EmptyBinding;
     }
@@ -137,6 +194,8 @@ public sealed class MusicAssetBindingIndex
     {
         var byDefinition = new Dictionary<string, TrackInfo>(StringComparer.OrdinalIgnoreCase);
         var byAudioIdentity = new Dictionary<string, List<TrackInfo>>(
+            StringComparer.OrdinalIgnoreCase);
+        var byFinaleIdentity = new Dictionary<string, List<TrackInfo>>(
             StringComparer.OrdinalIgnoreCase);
         foreach (var track in settings.SelectMany(setting => setting.Tracks))
         {
@@ -166,11 +225,29 @@ public sealed class MusicAssetBindingIndex
 
                 matches.Add(info);
             }
+
+            foreach (var identity in track.MatchingFinaleAudioPaths
+                         .Select(NormalizeIdentity)
+                         .Where(path => !string.IsNullOrWhiteSpace(path))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!byFinaleIdentity.TryGetValue(identity, out var matches))
+                {
+                    matches = new List<TrackInfo>();
+                    byFinaleIdentity.Add(identity, matches);
+                }
+
+                matches.Add(info);
+            }
         }
 
         return new TrackIndexes(
             byDefinition,
             byAudioIdentity.ToDictionary(
+                pair => pair.Key,
+                pair => (IReadOnlyList<TrackInfo>)pair.Value.ToArray(),
+                StringComparer.OrdinalIgnoreCase),
+            byFinaleIdentity.ToDictionary(
                 pair => pair.Key,
                 pair => (IReadOnlyList<TrackInfo>)pair.Value.ToArray(),
                 StringComparer.OrdinalIgnoreCase));
@@ -246,9 +323,6 @@ public sealed class MusicAssetBindingIndex
         setting.Record.Plugin.Path,
         setting.MusicTypeRecord.Plugin.Path);
 
-    private static string NormalizePath(string path) =>
-        MusicSettingsAnalyzer.NormalizeAssetPath(path);
-
     private static string NormalizeIdentity(string path) =>
         MusicAudioPathIdentity.NormalizeMusicIdentity(path);
 
@@ -260,7 +334,8 @@ public sealed class MusicAssetBindingIndex
 
     private sealed record TrackIndexes(
         IReadOnlyDictionary<string, TrackInfo> ByDefinition,
-        IReadOnlyDictionary<string, IReadOnlyList<TrackInfo>> ByAudioIdentity);
+        IReadOnlyDictionary<string, IReadOnlyList<TrackInfo>> ByAudioIdentity,
+        IReadOnlyDictionary<string, IReadOnlyList<TrackInfo>> ByFinaleIdentity);
 
     private sealed record SettingConflictKeys(
         string MusicTypeFormKey,

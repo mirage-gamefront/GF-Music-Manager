@@ -1,4 +1,5 @@
 using GfMusicManager.Core.Diagnostics;
+using GfMusicManager.Core.Localization;
 using SkyrimScan.Core.Models;
 
 namespace GfMusicManager.Core.Generation;
@@ -43,7 +44,7 @@ public sealed class MusicTypeDistributorOutputNameResolver
         }
 
         throw new MusicGenerationOutputException(
-            "既存MTDより後に読み込まれる出力ファイル名を決定できません。");
+            UiText.Get("Generation.Output.MtdOutputNameUnavailable"));
     }
 
     private static bool SortsAfterAll(
@@ -82,7 +83,8 @@ public sealed class MusicTypeDistributorOutputNameResolver
                 exception is IOException or UnauthorizedAccessException)
             {
                 GfMusicManagerLog.Warning(
-                    $"MTD filename discovery skipped {mod.Name}: {exception.Message}");
+                    $"MTD filename discovery skipped {mod.Name}: " +
+                    GenerationMessageFormatter.ExceptionDetail(exception));
             }
         }
 

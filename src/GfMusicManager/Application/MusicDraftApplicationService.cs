@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using GfMusicManager.Core.Localization;
 
 namespace GfMusicManager.Application;
 
@@ -21,12 +22,12 @@ public sealed class MusicDraftApplicationService
     {
         if (string.IsNullOrWhiteSpace(mo2Root))
         {
-            throw new ArgumentException("MO2ルートが空です。", nameof(mo2Root));
+            throw new ArgumentException(UiText.Get("Draft.Mo2RootRequired"), nameof(mo2Root));
         }
 
         if (string.IsNullOrWhiteSpace(profileName))
         {
-            throw new ArgumentException("プロファイル名が空です。", nameof(profileName));
+            throw new ArgumentException(UiText.Get("Draft.ProfileRequired"), nameof(profileName));
         }
 
         var identity =
@@ -53,4 +54,3 @@ public sealed class MusicDraftApplicationService
     public bool ResetProfile(string mo2Root, string profileName) =>
         Reset(GetProfileDraftPath(mo2Root, profileName));
 }
-

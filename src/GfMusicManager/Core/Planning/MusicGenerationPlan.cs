@@ -1,4 +1,5 @@
 using GfMusicManager.Core.Analysis;
+using GfMusicManager.Core.Localization;
 using SkyrimScan.Core.Models;
 
 namespace GfMusicManager.Core.Planning;
@@ -87,7 +88,7 @@ public sealed class MusicGenerationPlan
             conflicts.Add(new MusicGenerationPlanConflict(
                 MusicGenerationPlanConflictKind.DuplicateVirtualPath,
                 group.Key,
-                "同じゲーム内パスに重複音源があります。競合で負けたファイルのみGF Music Productへコピーし、利用できるようにします。",
+                UiText.Get("Generation.Conflict.DuplicateVirtualPath"),
                 group.ToArray()));
         }
 
@@ -120,7 +121,9 @@ public sealed class MusicGenerationPlan
             conflicts.Add(new MusicGenerationPlanConflict(
                 MusicGenerationPlanConflictKind.MultipleGeneratedMusicTypesForRecord,
                 group.Key.Replace('\u001f', ':'),
-                $"同じ{scopeLabel}に異なるMusic Typeが割り当てられています。適用先ごとに統合用Music Typeを作成し、採用Trackを集約します。",
+                UiText.Format(
+                    "Generation.Conflict.MultipleMusicTypes",
+                    scopeLabel),
                 entries,
                 destination.Scope,
                 destination.ScopeFormKey));
@@ -205,7 +208,9 @@ public sealed class MusicGenerationPlanEntry
     {
         if (string.IsNullOrWhiteSpace(assetKey))
         {
-            throw new ArgumentException("音源キーが空です。", nameof(assetKey));
+            throw new ArgumentException(
+                UiText.Get("Generation.Plan.AssetKeyRequired"),
+                nameof(assetKey));
         }
 
         ArgumentNullException.ThrowIfNull(initialDestinations);
@@ -286,23 +291,15 @@ public sealed class MusicGenerationPlanEntry
             return;
         }
 
-        var incomingByKey = incoming.ToDictionary(
-            track => track.TrackKey,
-            StringComparer.OrdinalIgnoreCase);
-        foreach (var existing in _tracks)
-        {
-            if (incomingByKey.TryGetValue(existing.TrackKey, out var replacement))
-            {
-                existing.ReplaceConditions(replacement.Conditions);
-            }
-        }
-
-        var existingKeys = _tracks
-            .Select(track => track.TrackKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var consumedIdentities = ApplyPersistedConditions(incoming, out _);
         _tracks = _tracks
             .Concat(incoming
-                .Where(replacement => !existingKeys.Contains(replacement.TrackKey))
+                .GroupBy(
+                    replacement => MusicGenerationTrackKey.CreatePersistenceIdentity(
+                        replacement.TrackKey),
+                    StringComparer.OrdinalIgnoreCase)
+                .Where(group => !consumedIdentities.Contains(group.Key))
+                .Select(group => group.Last())
                 .Select(CloneTrackPlan))
             .ToArray();
     }
@@ -310,25 +307,58 @@ public sealed class MusicGenerationPlanEntry
     public int ApplyExistingTrackConditions(IEnumerable<MusicGenerationTrackPlan> trackPlans)
     {
         ArgumentNullException.ThrowIfNull(trackPlans);
-        var incomingByKey = trackPlans
+        var incoming = trackPlans
             .GroupBy(track => track.TrackKey, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Last(),
-                StringComparer.OrdinalIgnoreCase);
-        var applied = 0;
+            .Select(group => group.Last())
+            .ToArray();
+        ApplyPersistedConditions(incoming, out var applied);
+        return applied;
+    }
+
+    private HashSet<string> ApplyPersistedConditions(
+        IReadOnlyList<MusicGenerationTrackPlan> incoming,
+        out int applied)
+    {
+        applied = 0;
+        var consumedIdentities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var currentIdentityCounts = _tracks
+            .GroupBy(
+                track => MusicGenerationTrackKey.CreatePersistenceIdentity(track.TrackKey),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        var incomingByIdentity = incoming
+            .GroupBy(
+                track => MusicGenerationTrackKey.CreatePersistenceIdentity(track.TrackKey),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+
         foreach (var existing in _tracks)
         {
-            if (!incomingByKey.TryGetValue(existing.TrackKey, out var replacement))
+            var identity = MusicGenerationTrackKey.CreatePersistenceIdentity(existing.TrackKey);
+            if (!incomingByIdentity.TryGetValue(identity, out var candidates))
             {
                 continue;
             }
 
-            existing.ReplaceConditions(replacement.Conditions);
+            var replacement = currentIdentityCounts[identity] == 1
+                ? candidates.Last()
+                : candidates.LastOrDefault(candidate =>
+                    candidate.TrackKey.Equals(
+                        existing.TrackKey,
+                        StringComparison.OrdinalIgnoreCase));
+            if (replacement is null)
+            {
+                continue;
+            }
+
+            existing.ReplaceConditions(existing.Conditions
+                .Where(condition => !condition.IsEditable)
+                .Concat(replacement.Conditions.Where(condition => condition.IsEditable)));
+            consumedIdentities.Add(identity);
             applied++;
         }
 
-        return applied;
+        return consumedIdentities;
     }
 
     public void ReplaceTrackPlans(IEnumerable<MusicGenerationTrackPlan> trackPlans)

@@ -101,6 +101,7 @@ public sealed class PluginRecordScannerTests
             var mod = new SkyrimMod(modKey, SkyrimRelease.SkyrimSE);
             var keyword = mod.Keywords.AddNew("Keyword_Fixture");
             var weather = mod.Weathers.AddNew("Weather_Fixture");
+            var location = mod.Locations.AddNew("Location_Fixture");
             var playerFormKey = new FormKey(
                 ModKey.FromNameAndExtension("Skyrim.esm"),
                 0x14);
@@ -147,6 +148,21 @@ public sealed class PluginRecordScannerTests
                 Data = weatherData
             });
 
+            var currentLocationData = new GetInCurrentLocConditionData
+            {
+                RunOnType = Condition.RunOnType.Subject,
+                RunOnTypeIndex = -1
+            };
+            currentLocationData.Location = new FormLinkOrIndex<ILocationGetter>(
+                currentLocationData,
+                location.FormKey);
+            track.Conditions.Add(new ConditionFloat
+            {
+                CompareOperator = CompareOperator.EqualTo,
+                ComparisonValue = 1f,
+                Data = currentLocationData
+            });
+
             using (var stream = File.Create(pluginPath))
             {
                 mod.WriteToBinary(stream, new BinaryWriteParameters());
@@ -182,6 +198,12 @@ public sealed class PluginRecordScannerTests
                 condition.FunctionName == "GetIsCurrentWeather"));
             Assert.Equal(weather.FormKey.ToString(), currentWeather.WeatherFormKey);
             Assert.Equal("Subject", currentWeather.RunOnType);
+
+            var currentLocation = Assert.Single(conditions.Where(condition =>
+                condition.FunctionName == "GetInCurrentLoc"));
+            Assert.Equal(location.FormKey.ToString(), currentLocation.LocationFormKey);
+            Assert.Contains($"Location={location.FormKey}", currentLocation.DataSummary);
+            Assert.Equal("Subject", currentLocation.RunOnType);
         }
         finally
         {

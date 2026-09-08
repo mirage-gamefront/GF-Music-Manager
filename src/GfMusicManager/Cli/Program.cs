@@ -185,77 +185,6 @@ try
         return 0;
     }
 
-    if (args[0].Equals("dfg", StringComparison.OrdinalIgnoreCase) &&
-        args.Length >= 2 &&
-        args[1].Equals("generate", StringComparison.OrdinalIgnoreCase))
-    {
-        var parsedDfg = ParseDfgGenerationOptions(args[2..]);
-        var scanDocument = MusicScanResultJson.Load(parsedDfg.ScanResultPath);
-        var planDocument = MusicPlanJson.Load(parsedDfg.PlanPath);
-        var planSnapshot = ApplyVanillaOverride(
-            planDocument.Plan,
-            parsedDfg.KeepVanillaMusic);
-        var generated = new MusicGenerationApplicationService().Generate(
-            scanDocument.Result,
-            planSnapshot,
-            new MusicGenerationApplicationOptions
-            {
-                OutputModDirectory = parsedDfg.Options.OutputModDirectory,
-                OutputMode = MusicGenerationOutputMode.Dfg,
-                DfgPackageName = parsedDfg.Options.PackageName,
-                OverwriteExisting = parsedDfg.Options.OverwriteExisting,
-                WorldSpaceIndividualAssignment =
-                    parsedDfg.Options.WorldSpaceIndividualAssignment,
-                SelectedWorldSpaceFormKeys =
-                    parsedDfg.Options.SelectedWorldSpaceFormKeys,
-                ExistingMtdFileNames = parsedDfg.Options.ExistingMtdFileNames,
-                CapacityPolicy = parsedDfg.Options.CapacityPolicy
-            });
-        var output = generated.Output;
-        var dfgOutput = output.DfgOutput ??
-            throw new InvalidOperationException(
-                "DFG方式の生成結果が共通生成パイプラインから返されませんでした。");
-        Console.WriteLine(JsonSerializer.Serialize(
-            new
-            {
-                command = "dfg generate",
-                scanResult = Path.GetFullPath(parsedDfg.ScanResultPath),
-                plan = Path.GetFullPath(parsedDfg.PlanPath),
-                output = output.OutputModDirectory,
-                outputMode = output.OutputMode.ToString(),
-                package = dfgOutput.PackageDirectory,
-                manifest = dfgOutput.ManifestPath,
-                metadata = dfgOutput.MetadataPath,
-                packageDatabase = dfgOutput.PackageDatabasePath,
-                imports = dfgOutput.ImportPaths,
-                musicTracks = dfgOutput.MusicTrackCount,
-                musicTypes = dfgOutput.MusicTypeCount,
-                externalMusicTypePatches = dfgOutput.ExternalMusicTypePatchCount,
-                officialReferences = dfgOutput.OfficialReferenceCount,
-                unsupportedAssignments = dfgOutput.UnsupportedAssignmentCount,
-                commonOutput = new
-                {
-                    mtd = output.MtdFilePath,
-                    cellSkyPatcher = output.CellSkyPatcherFilePath,
-                    plugins = output.Plugins.Select(plugin => plugin.PluginFileName),
-                    cells = output.Cells.Count,
-                    worldSpaces = output.WorldSpaces.Count,
-                    assets = output.Assets.Count,
-                    referencedAssets = output.Assets.Count(asset => !asset.IsCopied),
-                    copiedAssets = output.Assets.Count(asset => asset.IsCopied),
-                    diagnostic = new
-                    {
-                        output.Diagnostic.IsSuccess,
-                        output.Diagnostic.CheckCount,
-                        output.Diagnostic.ErrorCount,
-                        output.Diagnostic.Summary
-                    }
-                }
-            },
-            new JsonSerializerOptions { WriteIndented = true }));
-        return 0;
-    }
-
     if (args[0].Equals("validate", StringComparison.OrdinalIgnoreCase))
     {
         var parsedValidation = ParseGenerationOptions(args[1..]);
@@ -350,7 +279,7 @@ try
         if (manifest is null || manifest.Plugins.Count == 0)
         {
             throw new InvalidDataException(
-                $"生成MODのmanifestにプラグインがありません：{parsedApply.ManifestPath}");
+                $"The generated mod manifest contains no plugins: {parsedApply.ManifestPath}");
         }
 
         var state = new MusicMo2ApplicationService().Apply(
@@ -440,11 +369,6 @@ catch (MusicGenerationOutputException exception)
 {
     Console.Error.WriteLine($"Generation error: {exception.Message}");
     return 30;
-}
-catch (DfgMusicGenerationOutputException exception)
-{
-    Console.Error.WriteLine($"DFG generation error: {exception.Message}");
-    return 31;
 }
 catch (Exception exception)
 {
@@ -647,98 +571,6 @@ static (string ScanResultPath, string PlanPath, MusicGenerationApplicationOption
         keepVanillaMusic);
 }
 
-static (string ScanResultPath, string PlanPath,
-    DfgMusicGenerationApplicationOptions Options, bool? KeepVanillaMusic)
-    ParseDfgGenerationOptions(IReadOnlyList<string> args)
-{
-    string? scanResultPath = null;
-    string? planPath = null;
-    string? outputModDirectory = null;
-    string packageName = "GF Music Manager DFG";
-    var overwriteExisting = false;
-    var worldSpace = false;
-    var existingMtdFileNames = new List<string>();
-    bool? keepVanillaMusic = null;
-
-    for (var index = 0; index < args.Count; index++)
-    {
-        switch (args[index])
-        {
-            case "--scan-result":
-                scanResultPath = ReadValue(args, ref index, "--scan-result");
-                break;
-            case "--plan":
-                planPath = ReadValue(args, ref index, "--plan");
-                break;
-            case "--output-mod":
-                outputModDirectory = ReadValue(args, ref index, "--output-mod");
-                break;
-            case "--package-name":
-                packageName = ReadValue(args, ref index, "--package-name");
-                break;
-            case "--overwrite":
-                overwriteExisting = true;
-                break;
-            case "--worldspace":
-                worldSpace = true;
-                break;
-            case "--existing-mtd":
-                existingMtdFileNames.Add(ReadValue(args, ref index, "--existing-mtd"));
-                break;
-            case "--keep-vanilla":
-                if (keepVanillaMusic == false)
-                {
-                    throw new ArgumentException(
-                        "--keep-vanilla and --remove-vanilla cannot be combined");
-                }
-
-                keepVanillaMusic = true;
-                break;
-            case "--remove-vanilla":
-                if (keepVanillaMusic == true)
-                {
-                    throw new ArgumentException(
-                        "--keep-vanilla and --remove-vanilla cannot be combined");
-                }
-
-                keepVanillaMusic = false;
-                break;
-            default:
-                throw new ArgumentException($"Unknown option: {args[index]}");
-        }
-    }
-
-    if (string.IsNullOrWhiteSpace(scanResultPath))
-    {
-        throw new ArgumentException("--scan-result is required");
-    }
-
-    if (string.IsNullOrWhiteSpace(planPath))
-    {
-        throw new ArgumentException("--plan is required");
-    }
-
-    if (string.IsNullOrWhiteSpace(outputModDirectory))
-    {
-        throw new ArgumentException("--output-mod is required");
-    }
-
-    return (
-        Path.GetFullPath(scanResultPath),
-        Path.GetFullPath(planPath),
-        new DfgMusicGenerationApplicationOptions
-        {
-                OutputModDirectory = Path.GetFullPath(outputModDirectory),
-                PackageName = packageName,
-                OverwriteExisting = overwriteExisting,
-                WorldSpaceIndividualAssignment = worldSpace,
-                ExistingMtdFileNames = existingMtdFileNames.Count == 0
-                    ? null
-                    : existingMtdFileNames
-            },
-        keepVanillaMusic);
-}
-
 static (string PlanPath, string OutputPath, IReadOnlyList<string> AdoptAssetKeys,
     IReadOnlyList<string> ExcludeAssetKeys, bool? KeepVanillaMusic)
     ParsePlanEditOptions(IReadOnlyList<string> args)
@@ -878,7 +710,7 @@ static (string? DraftPath, string? Mo2Root, string? ProfileName)
     if (string.IsNullOrWhiteSpace(draftPath) &&
         (string.IsNullOrWhiteSpace(mo2Root) || string.IsNullOrWhiteSpace(profileName)))
     {
-        throw new ArgumentException("--draft または --mo2-root と --profile が必要です");
+        throw new ArgumentException("Provide --draft, or provide both --mo2-root and --profile.");
     }
 
     return (
@@ -954,7 +786,7 @@ static (
         string.IsNullOrWhiteSpace(manifestPath))
     {
         throw new ArgumentException(
-            "--mo2-root、--profile、--scan-result、--plan、--manifest は必須です");
+            "--mo2-root, --profile, --scan-result, --plan, and --manifest are required.");
     }
 
     return (
@@ -1011,10 +843,6 @@ static void PrintHelp()
     Console.WriteLine("       [--long-placement-threshold <number>]");
     Console.WriteLine("  generate --scan-result <path> --plan <path> [--output-mod <path>]");
     Console.WriteLine("       [--overwrite] [--worldspace] [--existing-mtd <name> ...]");
-    Console.WriteLine("       [--keep-vanilla | --remove-vanilla]");
-    Console.WriteLine("  dfg generate --scan-result <path> --plan <path> --output-mod <path>");
-    Console.WriteLine("       [--package-name <name>] [--overwrite] [--worldspace]");
-    Console.WriteLine("       [--existing-mtd <name> ...] [--keep-vanilla | --remove-vanilla]");
     Console.WriteLine("       [--keep-vanilla | --remove-vanilla]");
     Console.WriteLine("  validate --scan-result <path> --plan <path> [--output-mod <path>]");
     Console.WriteLine("       [--keep-vanilla | --remove-vanilla]");

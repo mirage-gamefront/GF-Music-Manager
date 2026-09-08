@@ -24,6 +24,14 @@ public sealed record MusicConditionSource(
 
     public string? WeatherFormKey { get; init; }
 
+    public string? LocationFormKey { get; init; }
+
+    public string? WorldspaceOrListFormKey { get; init; }
+
+    public string? FormListFormKey { get; init; }
+
+    public string? QuestFormKey { get; init; }
+
     public string? KeywordEditorId { get; init; }
 
     public string? KeywordDisplayName { get; init; }
@@ -84,6 +92,10 @@ public sealed record MusicConditionSource(
         {
             KeywordFormKey = condition.KeywordFormKey,
             WeatherFormKey = condition.WeatherFormKey,
+            LocationFormKey = condition.LocationFormKey,
+            WorldspaceOrListFormKey = condition.WorldspaceOrListFormKey,
+            FormListFormKey = condition.FormListFormKey,
+            QuestFormKey = condition.QuestFormKey,
             ComparisonValueType = condition.ComparisonValueType,
             ComparisonGlobalFormKey = condition.ComparisonGlobalFormKey,
             RunOnType = condition.RunOnType,
@@ -150,6 +162,13 @@ public sealed record MusicConditionSource(
         (functionName.Equals("GetCurrentTime", StringComparison.OrdinalIgnoreCase) ||
          functionName.Equals("GetCombatTargetHasKeyword", StringComparison.OrdinalIgnoreCase) ||
          functionName.Equals("GetIsCurrentWeather", StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsWritableFunction(string? functionName) =>
+        IsEditableFunction(functionName) ||
+        functionName?.Equals("GetInCurrentLoc", StringComparison.OrdinalIgnoreCase) == true ||
+        functionName?.Equals("GetInWorldspace", StringComparison.OrdinalIgnoreCase) == true ||
+        functionName?.Equals("GetInCurrentLocFormList", StringComparison.OrdinalIgnoreCase) == true ||
+        functionName?.Equals("GetQuestCompleted", StringComparison.OrdinalIgnoreCase) == true;
 
     public static MusicConditionSource CreateCombatKeyword(
         PluginRecordSource keyword,

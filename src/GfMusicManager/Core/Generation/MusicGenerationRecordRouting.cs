@@ -4,20 +4,8 @@ using GfMusicManager.Core.Planning;
 namespace GfMusicManager.Core.Generation;
 
 /// <summary>
-/// Selects how generated Music Track and Music Type data is materialized.
-/// Other output such as audio assets, MTD, Cell SkyPatcher output, and the
-/// optional WorldSpace ESP continues through the shared normal pipeline.
-/// </summary>
-public enum MusicGenerationOutputMode
-{
-    Normal,
-    Dfg
-}
-
-/// <summary>
-/// Keeps the routing API available for callers that need to inspect the
-/// destination plan.  DFG output itself never uses this set for static Track
-/// creation; all adopted Tracks are emitted by the DFG package instead.
+/// Resolves which adopted assets need static Music Track records for the
+/// generated ESP destination plan.
 /// </summary>
 public static class MusicGenerationRecordRouting
 {

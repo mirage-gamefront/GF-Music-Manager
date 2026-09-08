@@ -293,7 +293,7 @@ public sealed class MusicGenerationScenarioMatrixTests
                 @"music\same.xwm"),
             new[] { setting });
 
-        Assert.Throws<MusicGenerationOutputException>(() => Generate(
+        var duplicateOutput = Generate(
             context,
             invalidPlan,
             new[] { setting },
@@ -301,8 +301,9 @@ public sealed class MusicGenerationScenarioMatrixTests
             {
                 OutputModDirectory = context.OutputDirectory,
                 OverwriteExisting = true
-            }));
-        Assert.Equal(beforeFailure, HashOutputDirectory(context.OutputDirectory));
+            });
+        AssertCommonOutput(duplicateOutput, expectedAssets: 2, expectedTracks: 2);
+        Assert.NotEqual(beforeFailure, HashOutputDirectory(context.OutputDirectory));
     }
 
     private static void RunIndividualAssetExclusionScenario(ScenarioContext context)
@@ -462,7 +463,7 @@ public sealed class MusicGenerationScenarioMatrixTests
         var disabledPlugin = Assert.Single(disabledOn.Plugins.Where(plugin => plugin.ModName == "Disabled Music"));
         Assert.False(disabledPlugin.ModEnabled);
         Assert.False(disabledPlugin.Enabled);
-        Assert.Equal(3, disabledOn.Records.Count(record => record.Plugin.ModName == "Disabled Music"));
+        Assert.Equal(4, disabledOn.Records.Count(record => record.Plugin.ModName == "Disabled Music"));
 
         var disabledAssets = disabledOn.Assets
             .Where(asset => asset.ModName == "Disabled Music")
@@ -518,6 +519,32 @@ public sealed class MusicGenerationScenarioMatrixTests
         Assert.Equal(
             new[] { @"music\archive_track.xwm", @"music\disabled_loose.xwm" },
             generatedTrackPaths);
+        using (var generatedPlugin = SkyrimMod.CreateFromBinaryOverlay(
+                   new ModPath(
+                       ModKey.FromNameAndExtension(Path.GetFileName(generatedPluginPath)),
+                       generatedPluginPath),
+                   SkyrimRelease.SkyrimSE))
+        {
+            Assert.DoesNotContain(
+                generatedPlugin.ModHeader.MasterReferences,
+                master => master.Master.FileName.String.Equals(
+                    "DisabledMusic.esp",
+                    StringComparison.OrdinalIgnoreCase));
+            var generatedFormList = Assert.Single(generatedPlugin.FormLists.Records);
+            Assert.Equal(
+                new[] { "000001:Skyrim.esm" },
+                generatedFormList.Items.Select(item => item.FormKey.ToString()));
+            var generatedLooseTrack = generatedPlugin.MusicTracks.Records.Single(track =>
+                track.TrackFilename?.DataRelativePath.Path.Equals(
+                    @"music\disabled_loose.xwm",
+                    StringComparison.OrdinalIgnoreCase) == true);
+            Assert.NotNull(generatedLooseTrack.Conditions);
+            var generatedCondition = Assert.IsType<GetInCurrentLocFormListConditionData>(
+                Assert.Single(generatedLooseTrack.Conditions!).Data);
+            Assert.Equal(
+                generatedFormList.FormKey,
+                generatedCondition.FormList.Link.FormKey);
+        }
         var mtd = File.ReadAllText(result.MtdFilePath, Encoding.UTF8);
         Assert.Equal(2, CountMtdTrackReferences(mtd, "MUSDisabledScenario"));
         var manifest = ReadManifest(result.ManifestPath);
@@ -737,6 +764,24 @@ public sealed class MusicGenerationScenarioMatrixTests
         var archivedTrack = mod.MusicTracks.AddNew("MUSTrackDisabledArchive");
         archivedTrack.TrackFilename = new();
         archivedTrack.TrackFilename.TrySetPath(@"music\archive_track.xwm");
+        var locations = new FormList(mod, "DisabledSourceLocations")
+        {
+            Items = new()
+        };
+        locations.Items.Add(new FormLink<ISkyrimMajorRecordGetter>(
+            FormKey.Factory("000001:Skyrim.esm")));
+        mod.FormLists.Add(locations);
+        looseTrack.Conditions = new();
+        var conditionData = new GetInCurrentLocFormListConditionData();
+        conditionData.FormList = new FormLinkOrIndex<IFormListGetter>(
+            conditionData,
+            locations.FormKey);
+        looseTrack.Conditions.Add(new ConditionFloat
+        {
+            CompareOperator = CompareOperator.EqualTo,
+            ComparisonValue = 1f,
+            Data = conditionData
+        });
         var musicType = mod.MusicTypes.AddNew("MUSDisabledScenario");
         musicType.Tracks = new();
         musicType.Tracks.Add(new FormLink<IMusicTrackGetter>(looseTrack.FormKey));

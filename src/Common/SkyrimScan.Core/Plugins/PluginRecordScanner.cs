@@ -221,6 +221,10 @@ public sealed class PluginRecordScanner
             {
                 KeywordFormKey = ReadKeywordFormKey(data),
                 WeatherFormKey = ReadWeatherFormKey(data),
+                LocationFormKey = ReadLocationFormKey(data),
+                WorldspaceOrListFormKey = ReadNamedFormKey(data, "WorldspaceOrList"),
+                FormListFormKey = ReadNamedFormKey(data, "FormList"),
+                QuestFormKey = ReadNamedFormKey(data, "Quest"),
                 ComparisonValueType = comparisonValueType,
                 ComparisonGlobalFormKey = comparisonValueType.Equals(
                     "Global",
@@ -344,6 +348,17 @@ public sealed class PluginRecordScanner
                         : $"{property.Name}={weatherFormKey}";
                 }
 
+                if (property.Name.Equals("Location", StringComparison.OrdinalIgnoreCase) ||
+                    property.Name.Equals("WorldspaceOrList", StringComparison.OrdinalIgnoreCase) ||
+                    property.Name.Equals("FormList", StringComparison.OrdinalIgnoreCase) ||
+                    property.Name.Equals("Quest", StringComparison.OrdinalIgnoreCase))
+                {
+                    var locationFormKey = ReadFormLinkOrIndexFormKey(propertyValue);
+                    return locationFormKey is null
+                        ? null
+                        : $"{property.Name}={locationFormKey}";
+                }
+
                 if (property.Name.Equals("Reference", StringComparison.OrdinalIgnoreCase))
                 {
                     var referenceFormKey = ReadFormLinkOrIndexFormKey(propertyValue);
@@ -375,6 +390,15 @@ public sealed class PluginRecordScanner
         var weather = GetPropertyValue(data, "Weather");
         return ReadFormLinkOrIndexFormKey(weather);
     }
+
+    private static string? ReadLocationFormKey(object? data)
+    {
+        var location = GetPropertyValue(data, "Location");
+        return ReadFormLinkOrIndexFormKey(location);
+    }
+
+    private static string? ReadNamedFormKey(object? data, string propertyName) =>
+        ReadFormLinkOrIndexFormKey(GetPropertyValue(data, propertyName));
 
     private static string? ReadKeywordFormKeyFromValue(object? keyword)
         => ReadFormLinkOrIndexFormKey(keyword);

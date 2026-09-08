@@ -7,6 +7,23 @@ namespace GfMusicManager.Core.Tests;
 public sealed class MusicConditionFormatterTests
 {
     [Fact]
+    public void GetInCurrentLoc_IsWritableButRemainsHiddenFromTheConditionEditor()
+    {
+        Assert.False(MusicConditionSource.IsEditableFunction("GetInCurrentLoc"));
+        Assert.True(MusicConditionSource.IsWritableFunction("GetInCurrentLoc"));
+    }
+
+    [Theory]
+    [InlineData("GetInWorldspace")]
+    [InlineData("GetInCurrentLocFormList")]
+    [InlineData("GetQuestCompleted")]
+    public void ScannerOwnedConditions_AreWritableButRemainHiddenFromTheEditor(string functionName)
+    {
+        Assert.False(MusicConditionSource.IsEditableFunction(functionName));
+        Assert.True(MusicConditionSource.IsWritableFunction(functionName));
+    }
+
+    [Fact]
     public void Format_UsesReadableJapaneseNameAndComparisonSymbol()
     {
         var condition = new MusicConditionSource(

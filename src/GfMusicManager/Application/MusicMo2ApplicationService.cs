@@ -21,12 +21,22 @@ public sealed record MusicMo2ApplicationOptions
 
 public sealed class MusicMo2ApplicationService
 {
-    private readonly Mo2ProfileStateWriter _writer = new();
+    private readonly Mo2ProfileStateWriter _writer;
+    private readonly IMo2RunningInstanceRefresher _runningInstanceRefresher;
+
+    public MusicMo2ApplicationService(
+        Mo2ProfileStateWriter? writer = null,
+        IMo2RunningInstanceRefresher? runningInstanceRefresher = null)
+    {
+        _writer = writer ?? new Mo2ProfileStateWriter();
+        _runningInstanceRefresher = runningInstanceRefresher ??
+            new Mo2RunningInstanceRefresher();
+    }
 
     public Mo2ProfileStateChangeResult Apply(MusicMo2ApplicationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return _writer.Apply(
+        var result = _writer.Apply(
             options.Mo2Root,
             options.ProfileName,
             options.GeneratedModName,
@@ -34,6 +44,16 @@ public sealed class MusicMo2ApplicationService
             options.EnableGeneratedMod,
             options.SourcePluginNames,
             options.DisableSourcePlugins);
+
+        // MO2 owns an in-memory copy of mod/plugin state while it is running.
+        // Always refresh that copy after applying the desired state, even when
+        // the files already matched. Otherwise a stale MO2 session can later
+        // overwrite plugins.txt and silently disable the generated plugin.
+        _runningInstanceRefresher.RefreshIfRunning(
+            options.Mo2Root,
+            options.ProfileName);
+
+        return result;
     }
 }
 

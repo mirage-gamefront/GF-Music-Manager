@@ -297,6 +297,11 @@ public sealed class MusicScanApplicationTests
         var prepared = new MusicPlanApplicationService().PreparePlan(scan);
 
         var entry = Assert.Single(prepared.Plan.Entries);
+        Assert.Equal(MusicAssetRole.Primary, prepared.AssetBindings.Get(mainAsset.VirtualPath).Role);
+        var finaleBinding = prepared.AssetBindings.Get(finaleAsset.VirtualPath);
+        Assert.Equal(MusicAssetRole.FinaleOnly, finaleBinding.Role);
+        Assert.Single(finaleBinding.Settings);
+        Assert.Single(finaleBinding.Tracks);
         Assert.Equal(mainAsset.VirtualPath, entry.Asset?.VirtualPath);
         var plannedTrack = Assert.Single(entry.Tracks);
         Assert.Equal(finaleAsset.VirtualPath, plannedTrack.FinaleAudioPath);

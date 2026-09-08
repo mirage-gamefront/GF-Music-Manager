@@ -1,4 +1,5 @@
 using GfMusicManager.Core.Analysis;
+using GfMusicManager.Core.Localization;
 using SkyrimScan.Core.Models;
 
 namespace GfMusicManager.Core.Planning;
@@ -19,7 +20,9 @@ public sealed class MusicGenerationTrackPlan
     {
         if (string.IsNullOrWhiteSpace(trackKey))
         {
-            throw new ArgumentException("Music Trackキーが空です。", nameof(trackKey));
+            throw new ArgumentException(
+                UiText.Get("Generation.Plan.TrackKeyRequired"),
+                nameof(trackKey));
         }
 
         TrackKey = trackKey;
@@ -58,6 +61,8 @@ public sealed class MusicGenerationTrackPlan
 /// </summary>
 public static class MusicGenerationTrackKey
 {
+    private const char Separator = '\u001f';
+
     public static string CreateDefinitionIdentity(MusicTrackSource track)
     {
         ArgumentNullException.ThrowIfNull(track);
@@ -89,6 +94,25 @@ public static class MusicGenerationTrackKey
 
     public static string CreateFallback(string assetKey) =>
         string.Join("\u001f", "Asset", assetKey);
+
+    /// <summary>
+    /// Returns the condition-independent portion used to restore persisted
+    /// track decisions across scanner schema changes.
+    /// </summary>
+    public static string CreatePersistenceIdentity(string trackKey)
+    {
+        if (string.IsNullOrWhiteSpace(trackKey))
+        {
+            return trackKey;
+        }
+
+        var parts = trackKey.Split(Separator);
+        return parts.Length >= 3 &&
+               (parts[0].Equals("EditorID", StringComparison.OrdinalIgnoreCase) ||
+                parts[0].Equals("FormKey", StringComparison.OrdinalIgnoreCase))
+            ? string.Join(Separator, parts.Take(3))
+            : trackKey;
+    }
 }
 
 public static class MusicGenerationTrackPlanFactory
@@ -156,7 +180,9 @@ public static class MusicGenerationTrackPlanFactory
         ArgumentNullException.ThrowIfNull(settings);
         if (string.IsNullOrWhiteSpace(assetKey))
         {
-            throw new ArgumentException("音源キーが空です。", nameof(assetKey));
+            throw new ArgumentException(
+                UiText.Get("Generation.Plan.AssetKeyRequired"),
+                nameof(assetKey));
         }
 
         var tracks = settings

@@ -284,6 +284,75 @@ public sealed class MusicGenerationPlanTests
     }
 
     [Fact]
+    public void ApplyTrackConditions_MigratesOldConditionBearingKeyWithoutDuplicatingTrack()
+    {
+        var asset = Asset("Music Mod", @"music\fort.xwm");
+        var currentLocation = new MusicConditionSource(
+            "GetInCurrentLoc", "EqualTo", 1f, string.Empty,
+            "GetInCurrentLocConditionData", "Location=0128FE:Dawnguard.esm")
+        {
+            LocationFormKey = "0128FE:Dawnguard.esm"
+        };
+        var staleLocation = currentLocation with
+        {
+            LocationFormKey = null,
+            DataSummary = "Location=Mutagen.Bethesda.Plugins.FormLinkOrIndex"
+        };
+        var savedTime = MusicConditionSource.CreateCurrentTime(18f, "GreaterThanOrEqualTo");
+        var identity = string.Join('\u001f', "EditorID", "DMOMUSDawnguardCastle01", @"music\fort.xwm");
+        var currentKey = string.Join('\u001f', identity, "current-condition-key");
+        var oldKey = string.Join('\u001f', identity, "old-condition-key");
+        var entry = MusicGenerationPlanEntry.CreatePrepared(
+            asset,
+            true,
+            Array.Empty<MusicSettingSource>(),
+            new[] { new MusicGenerationTrackPlan(currentKey, new[] { currentLocation }) });
+
+        entry.ApplyTrackConditions(new[]
+        {
+            new MusicGenerationTrackPlan(currentKey, new[] { currentLocation }),
+            new MusicGenerationTrackPlan(oldKey, new[] { staleLocation, savedTime })
+        });
+
+        var track = Assert.Single(entry.Tracks);
+        Assert.Equal(currentKey, track.TrackKey);
+        Assert.Equal("0128FE:Dawnguard.esm", Assert.Single(track.Conditions.Where(
+            condition => condition.FunctionName == "GetInCurrentLoc")).LocationFormKey);
+        Assert.Contains(savedTime, track.Conditions);
+    }
+
+    [Fact]
+    public void ApplyExistingTrackConditions_UsesStableIdentityAndKeepsCurrentHiddenConditions()
+    {
+        var asset = Asset("Music Mod", @"music\fort.xwm");
+        var currentLocation = new MusicConditionSource(
+            "GetInCurrentLoc", "EqualTo", 1f, string.Empty,
+            "GetInCurrentLocConditionData", "Location=0128FE:Dawnguard.esm")
+        {
+            LocationFormKey = "0128FE:Dawnguard.esm"
+        };
+        var savedTime = MusicConditionSource.CreateCurrentTime(18f, "GreaterThanOrEqualTo");
+        var identity = string.Join('\u001f', "EditorID", "DMOMUSDawnguardCastle01", @"music\fort.xwm");
+        var currentKey = string.Join('\u001f', identity, "current-condition-key");
+        var oldKey = string.Join('\u001f', identity, "old-condition-key");
+        var entry = MusicGenerationPlanEntry.CreatePrepared(
+            asset,
+            true,
+            Array.Empty<MusicSettingSource>(),
+            new[] { new MusicGenerationTrackPlan(currentKey, new[] { currentLocation }) });
+
+        var applied = entry.ApplyExistingTrackConditions(new[]
+        {
+            new MusicGenerationTrackPlan(oldKey, new[] { savedTime })
+        });
+
+        Assert.Equal(1, applied);
+        var track = Assert.Single(entry.Tracks);
+        Assert.Contains(currentLocation, track.Conditions);
+        Assert.Contains(savedTime, track.Conditions);
+    }
+
+    [Fact]
     public void Resolve_KeepVanillaUsesOfficialTracksAndAdoptedGeneratedEntries()
     {
         var fixture = CreateResolutionFixture();

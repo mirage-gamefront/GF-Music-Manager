@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.Compression;
+using System.Text;
 using K4os.Compression.LZ4.Streams;
 using SkyrimScan.Core.Models;
 
@@ -12,6 +13,9 @@ public sealed class BsaArchiveReader
     private const uint ArchiveFlagEmbedFileNames = 0x0100;
     private const uint FileFlagCompressionToggle = 0x40000000;
     private const uint FileSizeMask = 0x3FFFFFFF;
+    private static readonly UTF8Encoding StrictUtf8 = new(
+        encoderShouldEmitUTF8Identifier: false,
+        throwOnInvalidBytes: true);
     private readonly ConcurrentDictionary<string, BsaArchiveIndex> _indexes =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -141,7 +145,17 @@ public sealed class BsaArchiveReader
             }
         }
 
-        return System.Text.Encoding.UTF8.GetString(bytes.ToArray());
+        var encodedBytes = bytes.ToArray();
+        try
+        {
+            return StrictUtf8.GetString(encodedBytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            // BSA paths are byte strings. Older archives commonly store Western
+            // filenames as single-byte text instead of UTF-8.
+            return Encoding.Latin1.GetString(encodedBytes);
+        }
     }
 
     private static string NormalizePath(string path) => path

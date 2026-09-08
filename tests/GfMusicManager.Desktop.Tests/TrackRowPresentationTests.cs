@@ -151,6 +151,99 @@ public sealed class TrackRowPresentationTests
     }
 
     [Fact]
+    public void FromAsset_FinaleOnly_IsNotUnusedOrSelectableAndDoesNotEnterPlan()
+    {
+        var plugin = new PluginSource(
+            "Fixture.esp", @"C:\Fixture\Fixture.esp", "Fixture", @"C:\Fixture",
+            true, true, 1, 1);
+        var trackRecord = Record("000001:Fixture.esp", "MusicTrack", "Track_Fixture", plugin);
+        var musicType = Record("000002:Fixture.esp", "MusicType", "MUSFixture", plugin);
+        var track = new MusicTrackSource(
+            trackRecord.FormKey,
+            trackRecord.EditorId,
+            new[] { @"music\main.xwm" },
+            trackRecord)
+        {
+            FinaleAudioPaths = new[] { @"music\finale.xwm" }
+        };
+        var setting = new MusicSettingSource(
+            MusicSettingScope.MusicType,
+            musicType.FormKey,
+            musicType.EditorId,
+            musicType.FormKey,
+            musicType.EditorId,
+            musicType,
+            musicType,
+            new[] { track });
+        var analysis = new MusicAnalysisResult(
+            new[] { setting },
+            new Dictionary<string, IReadOnlyList<MusicSettingSource>>(StringComparer.OrdinalIgnoreCase)
+            {
+                [@"music\main.xwm"] = new[] { setting }
+            },
+            Array.Empty<ScanIssue>());
+        var finaleAsset = new AssetSource(
+            @"music\finale.xwm", AssetSourceKind.Loose, "Fixture", @"C:\Fixture",
+            true, @"C:\Fixture\music\finale.xwm", null, 12);
+        var plan = new MusicGenerationPlan();
+        var binding = MusicAssetBindingIndex.Create(analysis, new[] { finaleAsset })
+            .Get(finaleAsset.VirtualPath);
+
+        var row = TrackRow.FromAsset(
+            finaleAsset,
+            analysis,
+            plan,
+            assetBinding: binding);
+
+        Assert.True(row.IsFinale);
+        Assert.False(row.IsUnused);
+        Assert.False(row.IsOperationSelectable);
+        Assert.False(row.IsAdopted);
+        row.IsSelected = true;
+        row.IsAdopted = true;
+        Assert.False(row.IsSelected);
+        Assert.False(row.IsAdopted);
+        Assert.Empty(plan.Entries);
+        Assert.Equal("フィナーレ", row.AdoptionStatusText);
+    }
+
+    [Fact]
+    public void VisibleSelection_IgnoresFinaleOnlyRowsWhenTogglingSelection()
+    {
+        var selectable = new TrackRow(
+            "Primary",
+            "Fixture",
+            "1件",
+            TrackAssetHandling.Reference,
+            @"music\primary.xwm",
+            "Primary",
+            false,
+            string.Empty);
+        var finale = new TrackRow(
+            "Finale",
+            "Fixture",
+            "1件",
+            TrackAssetHandling.Reference,
+            @"music\finale.xwm",
+            "Finale",
+            false,
+            string.Empty,
+            assetRole: MusicAssetRole.FinaleOnly);
+
+        var operationTracks = MainWindow.GetVisibleOperationSelectableTracks(
+            new[] { selectable, finale });
+
+        var operationTrack = Assert.Single(operationTracks);
+        Assert.Same(selectable, operationTrack);
+        Assert.Contains(operationTracks, track => !track.IsSelected);
+
+        selectable.IsSelected = true;
+
+        Assert.DoesNotContain(operationTracks, track => !track.IsSelected);
+        Assert.False(finale.IsSelected);
+    }
+
+    [Fact]
     public void PreviewState_ChangesListButtonAndTooltip()
     {
         var row = new TrackRow(
@@ -378,9 +471,49 @@ public sealed class TrackRowPresentationTests
         Assert.True(row.HasAudioDuplicateWarning);
         Assert.True(row.HasAutomaticResolution);
         Assert.Equal(
-            "同じゲーム内パスに重複音源があります。" + Environment.NewLine +
-            "競合で負けたファイルのみGF Music Productへコピーし、利用できるようにします。",
+            "【パス競合】" + Environment.NewLine +
+            "複数の音源が同じゲーム内パスを使用しています。" + Environment.NewLine +
+            "GF Music Managerでは競合を回避してそれぞれ採用できます。不要な音源がある場合だけチェックを外してください。",
             row.AutomaticResolutionText);
+    }
+
+    [Theory]
+    [InlineData(
+        AudioDuplicateKind.ContentMatch,
+        "【内容一致】",
+        "内容が完全に同じ音源です。")]
+    [InlineData(
+        AudioDuplicateKind.SimilarCandidate,
+        "【類似候補】",
+        "内容がほぼ同じ音源です。")]
+    public void AudioDuplicateWarning_ExplainsNonPathWarningKinds(
+        AudioDuplicateKind kind,
+        string heading,
+        string explanation)
+    {
+        var group = DuplicateGroup(kind);
+
+        var warning = TrackRow.BuildAudioDuplicateWarningText(new[] { group });
+
+        Assert.Contains(heading, warning, StringComparison.Ordinal);
+        Assert.Contains(explanation, warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AudioDuplicateWarning_CombinesAllApplicableKindsWithoutBlankContent()
+    {
+        var warning = TrackRow.BuildAudioDuplicateWarningText(
+            new[]
+            {
+                DuplicateGroup(AudioDuplicateKind.PathConflict),
+                DuplicateGroup(AudioDuplicateKind.ContentMatch),
+                DuplicateGroup(AudioDuplicateKind.SimilarCandidate)
+            });
+
+        Assert.Contains("【パス競合】", warning, StringComparison.Ordinal);
+        Assert.Contains("【内容一致】", warning, StringComparison.Ordinal);
+        Assert.Contains("【類似候補】", warning, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(warning));
     }
 
     [Fact]
@@ -663,6 +796,15 @@ public sealed class TrackRowPresentationTests
         Assert.All(row.GenerationPlanEntry.DestinationKeys, destination =>
             Assert.Equal(MusicSettingScope.MusicType, destination.Scope));
     }
+
+    private static AudioDuplicateGroup DuplicateGroup(AudioDuplicateKind kind) =>
+        new(
+            $"test:{kind}",
+            kind,
+            "test",
+            "test",
+            "test",
+            Array.Empty<AudioDuplicateSource>());
 
     private static PluginRecordSource Record(
         string formKey,

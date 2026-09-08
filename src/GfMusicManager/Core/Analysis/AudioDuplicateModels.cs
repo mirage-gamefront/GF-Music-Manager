@@ -50,7 +50,7 @@ public sealed record AudioDuplicateGroup(
         _ => UiText.Get("Analysis.AudioDuplicate.Kind.Unknown")
     };
 
-    public bool RequiresSingleSelection => Kind == AudioDuplicateKind.PathConflict;
+    public bool RequiresSingleSelection => false;
 
     public string ScoreText => SimilarityScore is null
         ? string.Empty
@@ -75,7 +75,7 @@ public sealed record AudioDuplicateReviewDecision(
 
 public static class AudioDuplicateDefaultSelection
 {
-    public static IReadOnlySet<string> SelectPathConflictWinners(
+    public static IReadOnlySet<string> SelectPathConflictSources(
         IEnumerable<AudioDuplicateGroup> groups,
         IReadOnlyDictionary<string, int>? modPriorities = null)
     {
@@ -84,14 +84,7 @@ public static class AudioDuplicateDefaultSelection
         var priorities = modPriorities ?? EmptyPriorities;
         return groups
             .Where(group => group.Kind == AudioDuplicateKind.PathConflict)
-            .SelectMany(group => group.Sources
-                .OrderByDescending(source => source.Asset.IsVfsWinner)
-                .ThenByDescending(source => source.Asset.ModEnabled)
-                .ThenByDescending(source => GetModPriority(priorities, source.Asset.ModName))
-                .ThenBy(source => source.Asset.SourceKind == AssetSourceKind.Loose ? 0 : 1)
-                .ThenBy(source => source.Asset.SourcePath, StringComparer.OrdinalIgnoreCase)
-                .Take(1)
-                .Select(source => source.AssetKey))
+            .SelectMany(group => group.Sources.Select(source => source.AssetKey))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 

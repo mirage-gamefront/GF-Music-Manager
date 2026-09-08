@@ -333,7 +333,9 @@
                         </Border>
                     </StackPanel>
 
-                    <StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
                         <TextBlock Text="{loc:Loc Main.Library}" FontSize="11" Foreground="{StaticResource MutedForeground}" Margin="6,0,0,8" />
                         <Button x:Name="AllLibraryButton" Style="{StaticResource SelectedNavButton}" Click="AllSourcesButton_Click">
                             <StackPanel Orientation="Horizontal">
@@ -351,6 +353,13 @@
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource WarningIconGeometry}" Fill="#ee8c8c" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" />
                                 <TextBlock Text="{loc:Loc Main.Warning}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="FinaleLibraryButton" Style="{StaticResource NavButton}" Click="FinaleOnlyButton_Click"
+                                ToolTip="{loc:Loc Main.FinaleTooltip}">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource MusicIconGeometry}" Fill="#83b9f4" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0" />
+                                <TextBlock Text="{loc:Loc Main.Finale}" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
@@ -404,7 +413,8 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                 </DockPanel>
             </Border>
 
@@ -444,6 +454,16 @@
                 </Grid>
 
                 <WrapPanel Grid.Row="1" Margin="0,0,0,12">
+                    <Button x:Name="VisibleSelectionToggleButton"
+                            Style="{StaticResource SmallButton}"
+                            Margin="0,0,8,0"
+                            Click="VisibleSelectionToggleButton_Click"
+                            ToolTip="{loc:Loc Main.VisibleSelectionTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource CheckIconGeometry}" Fill="#dceaff" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" />
+                            <TextBlock x:Name="VisibleSelectionToggleText" Text="{loc:Loc Main.VisibleSelectionAll}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                     <Border Background="#202a38" CornerRadius="8" Padding="10,7" Margin="0,0,8,0"><TextBlock x:Name="TrackCountText" Text="{loc:Loc Main.TrackCountInitial}" Foreground="#dce7f5" FontSize="11" /></Border>
                     <Border Background="{StaticResource GreenPanel}" CornerRadius="8" Padding="10,7" Margin="0,0,8,0" ToolTip="{loc:Loc Main.ReferenceTooltip}"><TextBlock x:Name="ReferenceCountText" Text="{loc:Loc Main.ReferenceCountInitial}" Foreground="{StaticResource GreenAccent}" FontSize="11" /></Border>
                     <Border Background="{StaticResource AmberPanel}" CornerRadius="8" Padding="10,7" Margin="0,0,8,0" ToolTip="{loc:Loc Main.CopyTooltip}"><TextBlock x:Name="CopyCountText" Text="{loc:Loc Main.CopyCountInitial}" Foreground="{StaticResource AmberAccent}" FontSize="11" /></Border>
@@ -492,16 +512,6 @@
                             </StackPanel>
                         </Border>
                     </Button>
-                    <Button x:Name="VisibleSelectionToggleButton"
-                            Style="{StaticResource SmallButton}"
-                            Margin="8,0,8,0"
-                            Click="VisibleSelectionToggleButton_Click"
-                            ToolTip="{loc:Loc Main.VisibleSelectionTooltip}">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource CheckIconGeometry}" Fill="#dceaff" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0" />
-                            <TextBlock x:Name="VisibleSelectionToggleText" Text="{loc:Loc Main.VisibleSelectionAll}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
                 </WrapPanel>
 
                 <Grid Grid.Row="2">
@@ -517,6 +527,7 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding IsOperationSelectable}"
                                               ToolTip="{loc:Loc Main.SelectTrackTooltip}"
                                               HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
@@ -533,6 +544,9 @@
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsAdopted}" Value="False">
                                                         <Setter Property="Background" Value="{StaticResource RedPanel}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsFinale}" Value="True">
+                                                        <Setter Property="Background" Value="{StaticResource BluePanel}" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -743,7 +757,15 @@
 
                         <Border x:Name="WarningBorder" Background="{StaticResource AmberPanel}" BorderBrush="#7b5a30" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,15,0,0" Visibility="Collapsed">
                             <StackPanel>
-                                <TextBlock x:Name="WarningText" TextWrapping="Wrap" Foreground="#f0cb8d" FontSize="11" />
+                                <ScrollViewer MaxHeight="170"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <TextBlock x:Name="WarningText"
+                                               TextWrapping="Wrap"
+                                               Foreground="#f0cb8d"
+                                               FontSize="11"
+                                               Margin="0,0,5,0" />
+                                </ScrollViewer>
                                 <Button x:Name="WarningDetailsButton"
                                         Style="{StaticResource SmallButton}"
                                         HorizontalAlignment="Left"

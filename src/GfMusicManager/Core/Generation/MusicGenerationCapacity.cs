@@ -7,7 +7,7 @@ public sealed record MusicGenerationCapacityPolicy(
     int MaxNewRecordsPerPlugin,
     bool AllowSplit = true)
 {
-    public static MusicGenerationCapacityPolicy CurrentAe { get; } = new(4096);
+    public static MusicGenerationCapacityPolicy CurrentAe { get; } = new(4095);
 
     public static MusicGenerationCapacityPolicy Legacy { get; } = new(2048);
 }
@@ -18,7 +18,10 @@ public sealed record MusicGenerationPluginEstimate(
     int NewMusicTypeRecordCount,
     IReadOnlyList<string> AssetKeys)
 {
-    public int NewRecordCount => NewMusicTrackRecordCount + NewMusicTypeRecordCount;
+    public int NewSupportRecordCount { get; init; }
+
+    public int NewRecordCount =>
+        NewMusicTrackRecordCount + NewMusicTypeRecordCount + NewSupportRecordCount;
 }
 
 public sealed record MusicGenerationCapacityEstimate(
@@ -31,7 +34,10 @@ public sealed record MusicGenerationCapacityEstimate(
     IReadOnlyList<MusicGenerationPluginEstimate> Plugins,
     bool AllowSplit)
 {
-    public int NewRecordCount => NewMusicTrackRecordCount + NewMusicTypeRecordCount;
+    public int NewSupportRecordCount { get; init; }
+
+    public int NewRecordCount =>
+        NewMusicTrackRecordCount + NewMusicTypeRecordCount + NewSupportRecordCount;
 
     public bool RequiresSplit => Plugins.Count > 1;
 
@@ -53,7 +59,8 @@ public sealed class MusicGenerationCapacityPlanner
         bool worldSpaceIndividualAssignment = false,
         IReadOnlySet<string>? selectedWorldSpaceFormKeys = null,
         int additionalMusicTypeRecordCount = 0,
-        IReadOnlySet<string>? staticTrackAssetKeys = null)
+        IReadOnlySet<string>? staticTrackAssetKeys = null,
+        int additionalSupportRecordCount = 0)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(policy);
@@ -70,6 +77,13 @@ public sealed class MusicGenerationCapacityPlanner
                 nameof(additionalMusicTypeRecordCount),
                 additionalMusicTypeRecordCount,
                 "The additional Music Type record count cannot be negative.");
+        }
+        if (additionalSupportRecordCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(additionalSupportRecordCount),
+                additionalSupportRecordCount,
+                "The additional support record count cannot be negative.");
         }
 
         var adoptedEntries = plan.Entries
@@ -91,7 +105,8 @@ public sealed class MusicGenerationCapacityPlanner
                 adoptedEntries,
                 worldSpaceIndividualAssignment,
                 selectedWorldSpaceFormKeys) +
-            additionalMusicTypeRecordCount);
+            additionalMusicTypeRecordCount,
+            additionalSupportRecordCount);
         var newMusicTypeRecordCount = pluginEstimates.Sum(
             plugin => plugin.NewMusicTypeRecordCount);
         var newMusicTrackRecordCount = pluginEstimates.Sum(
@@ -111,22 +126,26 @@ public sealed class MusicGenerationCapacityPlanner
             worldSpaceOverrideCount,
             policy.MaxNewRecordsPerPlugin,
             pluginEstimates,
-            policy.AllowSplit);
+            policy.AllowSplit)
+        {
+            NewSupportRecordCount = additionalSupportRecordCount
+        };
     }
 
     private static IReadOnlyList<MusicGenerationPluginEstimate> BuildPluginEstimates(
         IReadOnlyList<MusicGenerationPlanEntry> adoptedAssets,
         int maxNewRecordsPerPlugin,
-        int newMusicTypeRecordCount)
+        int newMusicTypeRecordCount,
+        int newSupportRecordCount)
     {
         if (adoptedAssets.Count == 0)
         {
-            if (newMusicTypeRecordCount == 0)
+            if (newMusicTypeRecordCount == 0 && newSupportRecordCount == 0)
             {
                 return Array.Empty<MusicGenerationPluginEstimate>();
             }
 
-            if (newMusicTypeRecordCount >= maxNewRecordsPerPlugin)
+            if (newMusicTypeRecordCount + newSupportRecordCount >= maxNewRecordsPerPlugin)
             {
                 throw new InvalidOperationException(
                     "The generated Music Type records alone exceed the plugin capacity.");
@@ -139,17 +158,21 @@ public sealed class MusicGenerationCapacityPlanner
                     0,
                     newMusicTypeRecordCount,
                     Array.Empty<string>())
+                {
+                    NewSupportRecordCount = newSupportRecordCount
+                }
             };
         }
 
-        if (newMusicTypeRecordCount >= maxNewRecordsPerPlugin)
+        if (newMusicTypeRecordCount + newSupportRecordCount >= maxNewRecordsPerPlugin)
         {
             throw new InvalidOperationException(
                 "The generated Music Type records alone exceed the plugin capacity.");
         }
 
         var estimates = new List<MusicGenerationPluginEstimate>();
-        var firstPluginTrackCapacity = maxNewRecordsPerPlugin - newMusicTypeRecordCount;
+        var firstPluginTrackCapacity =
+            maxNewRecordsPerPlugin - newMusicTypeRecordCount - newSupportRecordCount;
         var offset = 0;
         var isFirstPlugin = true;
         while (offset < adoptedAssets.Count)
@@ -187,7 +210,10 @@ public sealed class MusicGenerationCapacityPlanner
                 GetPluginFileName(index),
                 trackCount,
                 isFirstPlugin ? newMusicTypeRecordCount : 0,
-                batch.Select(entry => entry.AssetKey).ToArray()));
+                batch.Select(entry => entry.AssetKey).ToArray())
+            {
+                NewSupportRecordCount = isFirstPlugin ? newSupportRecordCount : 0
+            });
             offset += batch.Count;
             isFirstPlugin = false;
         }
