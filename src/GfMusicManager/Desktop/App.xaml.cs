@@ -9,7 +9,17 @@ public partial class App : System.Windows.Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        var startupSettings = new GfMusicManagerSettingsStore().Load();
+        var settingsStore = new GfMusicManagerSettingsStore();
+        var startupSettings = settingsStore.Load();
+        if (startupSettings.Language is null)
+        {
+            startupSettings = startupSettings with
+            {
+                Language = PromptForLanguage()
+            };
+            settingsStore.Save(startupSettings);
+        }
+
         UiText.SetLanguage(startupSettings.Language);
         GfMusicManagerLog.SetFileLoggingEnabled(startupSettings.EnableFileLogging);
         GfMusicManagerLog.Info($"Application startup. Arguments: {string.Join(" | ", e.Args)}");
@@ -25,6 +35,29 @@ public partial class App : System.Windows.Application
         {
             GfMusicManagerLog.Exception("Application startup failed", exception);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Asks for the UI language before the main window exists.  The dialog is
+    /// the only window at this point, so closing it must not end the
+    /// application and it must not become the application's main window.
+    /// </summary>
+    private string PromptForLanguage()
+    {
+        var previousShutdownMode = ShutdownMode;
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
+            var dialog = new LanguageSelectionWindow(
+                UiLanguage.FromCulture(System.Globalization.CultureInfo.CurrentUICulture));
+            dialog.ShowDialog();
+            return dialog.SelectedLanguage;
+        }
+        finally
+        {
+            MainWindow = null;
+            ShutdownMode = previousShutdownMode;
         }
     }
 

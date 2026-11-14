@@ -4,9 +4,9 @@
 
 ## ダウンロード
 
-[GF Music Manager v0.9.0-beta.3をダウンロード](https://github.com/mirage-gamefront/GF-Music-Manager/releases/tag/v0.9.0-beta.3)
+[GF Music Manager v0.9.0-beta.4をダウンロード](https://github.com/mirage-gamefront/GF-Music-Manager/releases/tag/v0.9.0-beta.4)
 
-Version: `0.9.0-beta.3`
+Version: `0.9.0-beta.4`
 
 GF Music Managerは、Mod Organizer 2（MO2）に導入されたSkyrim Special Edition / Anniversary Edition向け音楽MODを解析し、採用する曲と適用先を整理して、管理用MOD `GF Music Product` を生成するWindowsアプリです。
 
@@ -20,7 +20,7 @@ GF Music Managerは、Mod Organizer 2（MO2）に導入されたSkyrim Special E
 - Music Track、MTD、Cell用SkyPatcher設定、任意のWorldSpace上書きを生成
 - 既存の`GF Music Product`を読み込み、編集状態を復元して再生成
 - 生成確定前にESP、MTD、JSON、音源参照を自動診断
-- 日本語UIと英語UIを設定画面から切り替え
+- 日本語UIと英語UIを設定画面から切り替え（初回起動時にも選択できます）
 
 ## 必要環境
 

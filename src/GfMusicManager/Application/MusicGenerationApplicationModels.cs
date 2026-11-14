@@ -40,12 +40,26 @@ public sealed record MusicGenerationApplicationValidationResult(
     int IntegrationTargetCount,
     int ConflictCount,
     IReadOnlyList<string> Errors,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>
+    /// Tracks that would be left out because a playback condition cannot be written.
+    /// </summary>
+    public IReadOnlyList<MusicGenerationSkippedTrack> SkippedTracks { get; init; } =
+        Array.Empty<MusicGenerationSkippedTrack>();
+}
 
 public sealed record MusicGenerationApplicationResult(
     MusicGenerationPlan Plan,
     MusicPlanApplyResult PlanApplication,
-    MusicGenerationOutputResult Output);
+    MusicGenerationOutputResult Output)
+{
+    /// <summary>
+    /// Tracks that were left out of the generated product, with the reason for each.
+    /// </summary>
+    public IReadOnlyList<MusicGenerationSkippedTrack> SkippedTracks { get; init; } =
+        Array.Empty<MusicGenerationSkippedTrack>();
+}
 
 public sealed record MusicGenerationOutputValidationResult(
     bool IsValid,

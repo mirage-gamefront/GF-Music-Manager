@@ -18,6 +18,23 @@ public sealed class GfMusicManagerSettingsStoreTests
         Assert.False(File.Exists(fixture.SettingsPath));
     }
 
+    [Fact]
+    public void MissingSettingsLeaveTheLanguageUnchosenForTheFirstLaunchDialog()
+    {
+        using var fixture = new SettingsFixture();
+
+        Assert.Null(fixture.Store.Load().Language);
+    }
+
+    [Fact]
+    public void LanguageChosenAtFirstLaunchIsKept()
+    {
+        using var fixture = new SettingsFixture();
+        fixture.Store.Save(fixture.Store.Load() with { Language = UiLanguage.English });
+
+        Assert.Equal(UiLanguage.English, fixture.Store.Load().Language);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

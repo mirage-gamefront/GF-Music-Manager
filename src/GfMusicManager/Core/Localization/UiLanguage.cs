@@ -7,6 +7,15 @@ public static class UiLanguage
 
     public static readonly IReadOnlyList<string> Supported = new[] { Japanese, English };
 
+    /// <summary>
+    /// Picks the supported language that matches the operating system's
+    /// language: Japanese for any Japanese culture, otherwise English.
+    /// </summary>
+    public static string FromCulture(System.Globalization.CultureInfo? culture) =>
+        string.Equals(culture?.TwoLetterISOLanguageName, "ja", StringComparison.OrdinalIgnoreCase)
+            ? Japanese
+            : English;
+
     public static string Normalize(string? language)
     {
         return Supported.Any(code =>

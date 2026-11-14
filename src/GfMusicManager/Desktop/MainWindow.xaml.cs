@@ -175,7 +175,11 @@ public partial class MainWindow : Window
         CreateWorldSpaceMusicSettingsCheckBox.IsChecked = _createWorldSpaceMusicSettings;
         _enableFileLogging = settings.EnableFileLogging;
         EnableFileLoggingCheckBox.IsChecked = _enableFileLogging;
-        _language = UiLanguage.Normalize(settings.Language);
+        // A missing language (settings could not be saved at first launch) keeps
+        // the language the startup dialog already applied.
+        _language = settings.Language is null
+            ? UiText.Language
+            : UiLanguage.Normalize(settings.Language);
         LanguageComboBox.SelectedValue = _language;
         _previewVolume = settings.PreviewVolume;
         PreviewVolumeSlider.Value = _previewVolume;
@@ -2515,9 +2519,18 @@ public partial class MainWindow : Window
         var disableSourceEsp = DisableSourceEspCheckBox.IsChecked == true;
         _disableSourceEsp = disableSourceEsp;
         QueueDraftSave();
-        var expectedPluginNames = GetExpectedGeneratedPluginNames();
+        // Tracks with playback conditions that cannot be written are left out of
+        // generation, so every estimate and the MO2 confirmation use the plan
+        // without them.  The user's own plan is not changed.
+        var conditionSupport = MusicGenerationConditionSupport.Filter(_generationPlan);
+        foreach (var skippedTrack in conditionSupport.SkippedTracks)
+        {
+            GfMusicManagerLog.Warning($"ApplyReviewButton_Click: track will be skipped. {skippedTrack.Message}");
+        }
+
+        var expectedPluginNames = GetExpectedGeneratedPluginNames(conditionSupport.Plan);
         var sourcePluginNames = disableSourceEsp
-            ? GetAdoptedSourcePluginNames()
+            ? GetAdoptedSourcePluginNames(conditionSupport.SkippedModNames)
             : Array.Empty<string>();
 
         var overwriteExisting = false;
@@ -2541,7 +2554,8 @@ public partial class MainWindow : Window
             enableGeneratedMod,
             expectedPluginNames,
             disableSourceEsp,
-            sourcePluginNames);
+            sourcePluginNames,
+            conditionSupport.SkippedTracks);
         var stateAnswer = MessageBox.Show(
             stateSummary,
             UiText.Get("Main.Mo2StateConfirmationTitle"),
@@ -2677,10 +2691,13 @@ public partial class MainWindow : Window
                     BuildGenerationCompletedMessage(
                         result,
                         enableGeneratedMod,
-                        _selectedProfileName ?? string.Empty),
+                        _selectedProfileName ?? string.Empty,
+                        applicationResult.SkippedTracks),
                     UiText.Get("Main.GenerationCompletedTitle"),
                     MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                    applicationResult.SkippedTracks.Count > 0
+                        ? MessageBoxImage.Warning
+                        : MessageBoxImage.Information);
             }
         }
         catch (Exception exception)
@@ -2700,15 +2717,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private IReadOnlyList<string> GetExpectedGeneratedPluginNames()
+    private IReadOnlyList<string> GetExpectedGeneratedPluginNames(MusicGenerationPlan plan)
     {
         try
         {
             var estimate = new MusicGenerationCapacityPlanner().Estimate(
-                _generationPlan,
+                plan,
                 MusicGenerationCapacityPolicy.CurrentAe,
                 _createWorldSpaceMusicSettings,
-                additionalMusicTypeRecordCount: GetExpectedIntegrationMusicTypeCount());
+                additionalMusicTypeRecordCount: GetExpectedIntegrationMusicTypeCount(plan));
             if (estimate.Plugins.Count > 0)
             {
                 return estimate.Plugins
@@ -2726,9 +2743,9 @@ public partial class MainWindow : Window
         return new[] { MusicGenerationCapacityPlanner.GetPluginFileName(1) };
     }
 
-    private int GetExpectedIntegrationMusicTypeCount()
+    private int GetExpectedIntegrationMusicTypeCount(MusicGenerationPlan plan)
     {
-        if (_generationPlan.KeepVanillaMusic is null)
+        if (plan.KeepVanillaMusic is null)
         {
             return 0;
         }
@@ -2736,7 +2753,7 @@ public partial class MainWindow : Window
         try
         {
             return new MusicGenerationPlanResolver()
-                .Resolve(_generationPlan, _availableMusicSettings)
+                .Resolve(plan, _availableMusicSettings)
                 .IntegrationTargets
                 .Count(target => target.Scope != MusicSettingScope.WorldSpace);
         }
@@ -2753,7 +2770,8 @@ public partial class MainWindow : Window
         bool enableGeneratedMod,
         IReadOnlyList<string> generatedPluginNames,
         bool disableSourceEsp,
-        IReadOnlyList<string> sourcePluginNames)
+        IReadOnlyList<string> sourcePluginNames,
+        IReadOnlyList<MusicGenerationSkippedTrack>? skippedTracks = null)
     {
         var generatedState = UiText.Get(
             enableGeneratedMod ? "Main.StateEnabled" : "Main.StateDisabled");
@@ -2799,15 +2817,63 @@ public partial class MainWindow : Window
             }
         }
 
+        AppendSkippedTrackLines(
+            lines,
+            skippedTracks,
+            "Main.SkippedTracksHeader",
+            keepsSourceEsp: disableSourceEsp);
         lines.Add(string.Empty);
         lines.Add(UiText.Get("Main.Continue"));
         return string.Join(Environment.NewLine, lines);
     }
 
+    private const int MaxSkippedTrackLines = 10;
+
+    /// <summary>
+    /// Lists the Tracks that were left out of generation.  The full list is in
+    /// the log, so the dialog shows only the first few.
+    /// </summary>
+    private static void AppendSkippedTrackLines(
+        List<string> lines,
+        IReadOnlyList<MusicGenerationSkippedTrack>? skippedTracks,
+        string headerKey,
+        bool keepsSourceEsp)
+    {
+        if (skippedTracks is null || skippedTracks.Count == 0)
+        {
+            return;
+        }
+
+        lines.Add(string.Empty);
+        lines.Add(UiText.Format(headerKey, skippedTracks.Count));
+        lines.AddRange(skippedTracks
+            .Take(MaxSkippedTrackLines)
+            .Select(track => UiText.Format("Main.PluginNameItem", track.Message)));
+        if (skippedTracks.Count > MaxSkippedTrackLines)
+        {
+            lines.Add(UiText.Format(
+                "Main.SkippedTracksMore",
+                skippedTracks.Count - MaxSkippedTrackLines));
+        }
+
+        if (keepsSourceEsp)
+        {
+            lines.Add(UiText.Format(
+                "Main.SkippedSourceEspKept",
+                string.Join(
+                    ", ",
+                    skippedTracks
+                        .Select(track => track.ModName)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Order(StringComparer.OrdinalIgnoreCase))));
+        }
+    }
+
     internal static string BuildGenerationCompletedMessage(
         MusicGenerationOutputResult result,
         bool generatedModEnabled,
-        string profileName)
+        string profileName,
+        IReadOnlyList<MusicGenerationSkippedTrack>? skippedTracks = null)
     {
         var generatedState = UiText.Get(
             generatedModEnabled ? "Main.StateEnabled" : "Main.StateDisabled");
@@ -2861,6 +2927,11 @@ public partial class MainWindow : Window
             lines.Add(UiText.Format("Main.CellSettingsSummary", result.CellSkyPatcherFilePath));
         }
         lines.Add(UiText.Format("Main.ProfileSummaryLine", profileName));
+        AppendSkippedTrackLines(
+            lines,
+            skippedTracks,
+            "Main.SkippedTracksCompletedHeader",
+            keepsSourceEsp: false);
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -2918,10 +2989,17 @@ public partial class MainWindow : Window
                row.Placement.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 
-    private IReadOnlyList<string> GetAdoptedSourcePluginNames()
+    /// <summary>
+    /// Source ESPs that may be disabled after generation.  A mod that has a
+    /// Track left out of generation keeps its ESP, otherwise that Track's music
+    /// would disappear from the game.
+    /// </summary>
+    private IReadOnlyList<string> GetAdoptedSourcePluginNames(
+        IReadOnlySet<string> modNamesWithSkippedTracks)
     {
         var adoptedTracks = _tracks
-            .Where(track => track.IsAdopted && track.Asset is not null)
+            .Where(track => track.IsAdopted && track.Asset is not null &&
+                            !modNamesWithSkippedTracks.Contains(track.Asset.ModName))
             .ToArray();
         var sourceModNames = adoptedTracks
             .Select(track => track.Asset!.ModName)

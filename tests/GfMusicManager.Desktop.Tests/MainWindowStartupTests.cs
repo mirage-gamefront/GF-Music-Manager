@@ -32,7 +32,7 @@ public sealed class MainWindowStartupTests
                 var store = new GfMusicManagerSettingsStore(settingsPath);
                 window = new MainWindow(store);
                 Assert.Equal(DesktopProductInfo.WindowTitle, window.Title);
-                Assert.Equal("0.9.0-beta.3", DesktopProductInfo.Version);
+                Assert.Equal("0.9.0-beta.4", DesktopProductInfo.Version);
                 Assert.Equal(56, window.PreviewVolumeSlider.Value);
                 window.SettingsMo2RootTextBox.Text = string.Empty;
                 window.LanguageComboBox.SelectedValue = UiLanguage.English;

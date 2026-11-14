@@ -18,7 +18,8 @@ internal sealed record GfMusicManagerSettings(
     bool IncludeDisabledMods = false,
     bool CreateWorldSpaceMusicSettings = false,
     bool EnableFileLogging = false,
-    string Language = UiLanguage.Japanese,
+    // Null means the user has not chosen a language yet (first launch).
+    string? Language = null,
     double PreviewVolume = GfMusicManagerSettingsDefaults.PreviewVolume);
 
 internal sealed class GfMusicManagerSettingsStore
@@ -60,6 +61,9 @@ internal sealed class GfMusicManagerSettingsStore
                            new GfMusicManagerSettings();
             settings = settings with
             {
+                // An existing settings file without a language predates the
+                // language setting and stays Japanese; only a missing file
+                // (a fresh install) leaves the language unchosen.
                 Language = UiLanguage.Normalize(settings.Language),
                 PreviewVolume = NormalizePreviewVolume(settings.PreviewVolume)
             };

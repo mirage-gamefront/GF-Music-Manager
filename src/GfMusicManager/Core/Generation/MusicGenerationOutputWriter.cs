@@ -610,7 +610,7 @@ public sealed class MusicGenerationOutputWriter
         }
     }
 
-    private static void ValidateCondition(MusicConditionSource condition)
+    internal static void ValidateCondition(MusicConditionSource condition)
     {
         if (!MusicConditionSource.IsWritableFunction(condition.FunctionName))
         {
@@ -696,6 +696,21 @@ public sealed class MusicGenerationOutputWriter
             ParseFormKey(
                 condition.QuestFormKey,
                 UiText.Get("Generation.Label.Quest"));
+        }
+        else if (condition.FunctionName.Equals(
+                     "GetStageDone",
+                     StringComparison.OrdinalIgnoreCase))
+        {
+            ParseFormKey(
+                condition.QuestFormKey,
+                UiText.Get("Generation.Label.Quest"));
+            if (condition.StageIndex is null)
+            {
+                throw new MusicGenerationOutputException(
+                    UiText.Format(
+                        "Generation.Output.StageIndexMissing",
+                        condition.FunctionName));
+            }
         }
     }
 
@@ -1159,6 +1174,9 @@ public sealed class MusicGenerationOutputWriter
             "getquestcompleted" => CreateQuestCompletedCondition(
                 source,
                 compareOperator),
+            "getstagedone" => CreateStageDoneCondition(
+                source,
+                compareOperator),
             _ => throw new MusicGenerationOutputException(
                 UiText.Format(
                     "Generation.Output.ConditionNotSupportedInOutput",
@@ -1279,6 +1297,26 @@ public sealed class MusicGenerationOutputWriter
                 source.QuestFormKey,
                 UiText.Get("Generation.Label.Quest")));
         data.SecondUnusedIntParameter = source.SecondUnusedIntParameter ?? 0;
+        data.FirstUnusedStringParameter = source.FirstUnusedStringParameter ?? string.Empty;
+        data.SecondUnusedStringParameter = source.SecondUnusedStringParameter ?? string.Empty;
+        return CreateFloatCondition(source, compareOperator, data);
+    }
+
+    private static Condition CreateStageDoneCondition(
+        MusicConditionSource source,
+        CompareOperator compareOperator)
+    {
+        var data = new GetStageDoneConditionData();
+        ApplyConditionDataMetadata(data, source);
+        data.Quest = new FormLinkOrIndex<IQuestGetter>(
+            data,
+            ParseFormKey(
+                source.QuestFormKey,
+                UiText.Get("Generation.Label.Quest")));
+        data.Stage = source.StageIndex ?? throw new MusicGenerationOutputException(
+            UiText.Format(
+                "Generation.Output.StageIndexMissing",
+                source.FunctionName));
         data.FirstUnusedStringParameter = source.FirstUnusedStringParameter ?? string.Empty;
         data.SecondUnusedStringParameter = source.SecondUnusedStringParameter ?? string.Empty;
         return CreateFloatCondition(source, compareOperator, data);

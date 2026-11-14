@@ -167,6 +167,11 @@ public sealed record PluginRecordConditionSource(
     public string? QuestFormKey { get; init; }
 
     /// <summary>
+    /// The quest stage number used by stage conditions such as GetStageDone.
+    /// </summary>
+    public int? StageIndex { get; init; }
+
+    /// <summary>
     /// The concrete comparison arm used by the condition. Music-track
     /// conditions normally compare against a float, but the distinction is
     /// retained so a non-float condition is never silently rewritten.

@@ -225,6 +225,7 @@ public sealed class PluginRecordScanner
                 WorldspaceOrListFormKey = ReadNamedFormKey(data, "WorldspaceOrList"),
                 FormListFormKey = ReadNamedFormKey(data, "FormList"),
                 QuestFormKey = ReadNamedFormKey(data, "Quest"),
+                StageIndex = ReadNullableInt32(GetPropertyValue(data, "Stage")),
                 ComparisonValueType = comparisonValueType,
                 ComparisonGlobalFormKey = comparisonValueType.Equals(
                     "Global",

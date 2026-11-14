@@ -64,6 +64,27 @@ public sealed class MusicGenerationPlan
         return entry;
     }
 
+    /// <summary>
+    /// Builds a read-only view of this plan for one generation run.  The
+    /// source plan keeps the user's own decisions untouched.
+    /// </summary>
+    internal MusicGenerationPlan CreateDerivedPlan(
+        IEnumerable<MusicGenerationPlanEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var derived = new MusicGenerationPlan
+        {
+            KeepVanillaMusic = KeepVanillaMusic
+        };
+        foreach (var entry in entries)
+        {
+            derived._entries.Add(entry.AssetKey, entry);
+            derived._orderedEntries.Add(entry);
+        }
+
+        return derived;
+    }
+
     public void Clear()
     {
         _entries.Clear();
@@ -221,6 +242,43 @@ public sealed class MusicGenerationPlanEntry
             initialDestinations,
             assetKey,
             initialConditions);
+    }
+
+    private MusicGenerationPlanEntry(
+        string assetKey,
+        AssetSource? asset,
+        bool isAdopted,
+        IReadOnlyList<MusicSettingKey> destinationKeys,
+        IReadOnlyList<MusicGenerationTrackPlan> tracks)
+    {
+        AssetKey = assetKey;
+        Asset = asset;
+        IsAdopted = isAdopted;
+        _destinationKeys = destinationKeys;
+        _tracks = tracks;
+    }
+
+    /// <summary>
+    /// Copies this entry with a different Track list.  Track plans are copied
+    /// so the derived entry never shares mutable condition state.
+    /// </summary>
+    internal MusicGenerationPlanEntry CloneWithTracks(
+        bool isAdopted,
+        IEnumerable<MusicGenerationTrackPlan> tracks)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+        return new MusicGenerationPlanEntry(
+            AssetKey,
+            Asset,
+            isAdopted,
+            _destinationKeys,
+            tracks
+                .Select(track => new MusicGenerationTrackPlan(
+                    track.TrackKey,
+                    track.Conditions,
+                    track.FinaleAudioPath,
+                    track.FinaleAsset))
+                .ToArray());
     }
 
     public string AssetKey { get; }

@@ -32,6 +32,8 @@ public sealed record MusicConditionSource(
 
     public string? QuestFormKey { get; init; }
 
+    public int? StageIndex { get; init; }
+
     public string? KeywordEditorId { get; init; }
 
     public string? KeywordDisplayName { get; init; }
@@ -96,6 +98,7 @@ public sealed record MusicConditionSource(
             WorldspaceOrListFormKey = condition.WorldspaceOrListFormKey,
             FormListFormKey = condition.FormListFormKey,
             QuestFormKey = condition.QuestFormKey,
+            StageIndex = condition.StageIndex,
             ComparisonValueType = condition.ComparisonValueType,
             ComparisonGlobalFormKey = condition.ComparisonGlobalFormKey,
             RunOnType = condition.RunOnType,
@@ -168,7 +171,8 @@ public sealed record MusicConditionSource(
         functionName?.Equals("GetInCurrentLoc", StringComparison.OrdinalIgnoreCase) == true ||
         functionName?.Equals("GetInWorldspace", StringComparison.OrdinalIgnoreCase) == true ||
         functionName?.Equals("GetInCurrentLocFormList", StringComparison.OrdinalIgnoreCase) == true ||
-        functionName?.Equals("GetQuestCompleted", StringComparison.OrdinalIgnoreCase) == true;
+        functionName?.Equals("GetQuestCompleted", StringComparison.OrdinalIgnoreCase) == true ||
+        functionName?.Equals("GetStageDone", StringComparison.OrdinalIgnoreCase) == true;
 
     public static MusicConditionSource CreateCombatKeyword(
         PluginRecordSource keyword,

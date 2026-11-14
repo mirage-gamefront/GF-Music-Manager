@@ -8,6 +8,21 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Get-RelativePathCompat {
+    # [System.IO.Path]::GetRelativePath does not exist in Windows PowerShell 5.1.
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BasePath,
+        [Parameter(Mandatory = $true)]
+        [string]$TargetPath
+    )
+
+    $base = [System.IO.Path]::GetFullPath($BasePath).TrimEnd([char]92, [char]47) + [System.IO.Path]::DirectorySeparatorChar
+    $target = [System.IO.Path]::GetFullPath($TargetPath)
+    $relative = [System.Uri]::new($base).MakeRelativeUri([System.Uri]::new($target)).ToString()
+    return [System.Uri]::UnescapeDataString($relative).Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+}
+
 function Assert-PathUnderRoot {
     param(
         [Parameter(Mandatory = $true)]
@@ -114,7 +129,7 @@ function Copy-ReleaseSourceItem {
     $resolvedRepositoryRoot = [System.IO.Path]::GetFullPath($RepositoryRoot).TrimEnd(
         [System.IO.Path]::DirectorySeparatorChar,
         [System.IO.Path]::AltDirectorySeparatorChar)
-    $relativeSource = [System.IO.Path]::GetRelativePath($resolvedRepositoryRoot, $resolvedSource)
+    $relativeSource = (Get-RelativePathCompat -BasePath $resolvedRepositoryRoot -TargetPath $resolvedSource)
 
     if (Test-Path -LiteralPath $resolvedSource -PathType Leaf) {
         $destination = Join-Path $DestinationRoot $relativeSource
@@ -130,11 +145,11 @@ function Copy-ReleaseSourceItem {
 
     Get-ChildItem -LiteralPath $resolvedSource -Recurse -File |
         Where-Object {
-            $relativeFile = [System.IO.Path]::GetRelativePath($resolvedSource, $_.FullName)
+            $relativeFile = (Get-RelativePathCompat -BasePath $resolvedSource -TargetPath $_.FullName)
             $relativeFile -notmatch '(^|[\\/])(bin|obj|tmp|artifacts|TestResults|\.vs|\.git|\.tmp)([\\/]|$)'
         } |
         ForEach-Object {
-            $relativeFile = [System.IO.Path]::GetRelativePath($resolvedRepositoryRoot, $_.FullName)
+            $relativeFile = (Get-RelativePathCompat -BasePath $resolvedRepositoryRoot -TargetPath $_.FullName)
             $destination = Join-Path $DestinationRoot $relativeFile
             $destinationDirectory = Split-Path -Parent $destination
             New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
@@ -156,7 +171,7 @@ function Assert-NoForbiddenReleaseFiles {
 
     if ($forbiddenFiles) {
         $relativeFiles = $forbiddenFiles | ForEach-Object {
-            [System.IO.Path]::GetRelativePath($Root, $_.FullName)
+            (Get-RelativePathCompat -BasePath $Root -TargetPath $_.FullName)
         }
         throw "Forbidden release files were found: $($relativeFiles -join ', ')"
     }
@@ -269,7 +284,7 @@ function Assert-NoLocalEnvironmentReferences {
 
     $findings = [System.Collections.Generic.List[string]]::new()
     Get-ChildItem -LiteralPath $Root -Recurse -File | ForEach-Object {
-        $relativePath = [System.IO.Path]::GetRelativePath($Root, $_.FullName)
+        $relativePath = (Get-RelativePathCompat -BasePath $Root -TargetPath $_.FullName)
         if ($textExtensions -contains $_.Extension.ToLowerInvariant()) {
             $content = [System.IO.File]::ReadAllText($_.FullName)
             if ([System.Text.RegularExpressions.Regex]::IsMatch($content, $localPathPattern)) {
@@ -278,15 +293,15 @@ function Assert-NoLocalEnvironmentReferences {
 
             foreach ($literalReference in $literalReferences) {
                 $normalizedReference = $literalReference.Replace('\', '/')
-                if ($content.Contains($literalReference, [System.StringComparison]::OrdinalIgnoreCase) -or
-                    $content.Contains($normalizedReference, [System.StringComparison]::OrdinalIgnoreCase)) {
+                if (($content.IndexOf($literalReference, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+                    ($content.IndexOf($normalizedReference, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)) {
                     $findings.Add($relativePath)
                 }
             }
         }
         elseif ($_.Name -match '^(?i)(GfMusicManager.*\.(dll|exe)|SkyrimScan\.Core\.dll)$') {
             $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
-            $latinContent = [System.Text.Encoding]::Latin1.GetString($bytes)
+            $latinContent = [System.Text.Encoding]::GetEncoding(28591).GetString($bytes)
             $unicodeContent = [System.Text.Encoding]::Unicode.GetString($bytes)
             if ([System.Text.RegularExpressions.Regex]::IsMatch($latinContent, $localPathPattern) -or
                 [System.Text.RegularExpressions.Regex]::IsMatch($unicodeContent, $localPathPattern)) {
@@ -295,10 +310,10 @@ function Assert-NoLocalEnvironmentReferences {
 
             foreach ($literalReference in $literalReferences) {
                 $normalizedReference = $literalReference.Replace('\', '/')
-                if ($latinContent.Contains($literalReference, [System.StringComparison]::OrdinalIgnoreCase) -or
-                    $latinContent.Contains($normalizedReference, [System.StringComparison]::OrdinalIgnoreCase) -or
-                    $unicodeContent.Contains($literalReference, [System.StringComparison]::OrdinalIgnoreCase) -or
-                    $unicodeContent.Contains($normalizedReference, [System.StringComparison]::OrdinalIgnoreCase)) {
+                if (($latinContent.IndexOf($literalReference, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+                    ($latinContent.IndexOf($normalizedReference, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+                    ($unicodeContent.IndexOf($literalReference, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+                    ($unicodeContent.IndexOf($normalizedReference, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)) {
                     $findings.Add($relativePath)
                 }
             }

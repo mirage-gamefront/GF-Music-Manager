@@ -62,7 +62,8 @@ public sealed class MusicGenerationApplicationService
         var conflictCount = 0;
         try
         {
-            var prepared = preparedGeneration ?? Prepare(scanResult, planSnapshot);
+            var prepared = ApplyConditionSupport(
+                preparedGeneration ?? Prepare(scanResult, planSnapshot));
             var conflicts = prepared.Plan.Conflicts;
             entryCount = prepared.Plan.Entries.Count;
             var adoptedEntries = prepared.Plan.Entries
@@ -166,10 +167,15 @@ public sealed class MusicGenerationApplicationService
             UiText.Get("Progress.GenerationPlanPreparing"),
             5);
         var outputDirectory = ResolveOutputDirectory(scanResult, options);
-        var prepared = prepare();
+        var prepared = ApplyConditionSupport(prepare());
         GfMusicManagerLog.Info(
             $"Generation application: plan prepared in {generationStopwatch.Elapsed}. " +
-            $"entries={prepared.Plan.Entries.Count}, restored={prepared.PlanApplication.RestoredEntryCount}.");
+            $"entries={prepared.Plan.Entries.Count}, restored={prepared.PlanApplication.RestoredEntryCount}, " +
+            $"skippedTracks={prepared.SkippedTracks.Count}.");
+        foreach (var skippedTrack in prepared.SkippedTracks)
+        {
+            GfMusicManagerLog.Warning($"Generation application: track skipped. {skippedTrack.Message}");
+        }
         ReportProgress(
             options.Progress,
             MusicGenerationProgressStage.Resolving,
@@ -226,9 +232,12 @@ public sealed class MusicGenerationApplicationService
             $"Generation application: output completed in {generationStopwatch.Elapsed}.");
 
         return new MusicGenerationApplicationResult(
-            prepared.Plan,
+            prepared.SourcePlan,
             prepared.PlanApplication,
-            output);
+            output)
+        {
+            SkippedTracks = prepared.SkippedTracks
+        };
     }
 
     public MusicGenerationOutputValidationResult ValidateOutput(
@@ -273,7 +282,7 @@ public sealed class MusicGenerationApplicationService
                         manifest.SchemaVersion));
             }
 
-            var prepared = Prepare(scanResult, planSnapshot);
+            var prepared = ApplyConditionSupport(Prepare(scanResult, planSnapshot));
             var planResolution = _planResolver.Resolve(
                 prepared.Plan,
                 scanResult.MusicAnalysis.Settings);
@@ -373,6 +382,23 @@ public sealed class MusicGenerationApplicationService
         return new PreparedGeneration(plan, application);
     }
 
+    /// <summary>
+    /// Replaces the plan with a copy that leaves out Tracks whose playback
+    /// conditions cannot be written, so they are reported instead of aborting
+    /// the whole generation.  The caller's plan is not modified.
+    /// </summary>
+    private static PreparedGeneration ApplyConditionSupport(PreparedGeneration prepared)
+    {
+        var support = MusicGenerationConditionSupport.Filter(prepared.Plan);
+        return support.SkippedTracks.Count == 0
+            ? prepared
+            : prepared with
+            {
+                Plan = support.Plan,
+                SkippedTracks = support.SkippedTracks
+            };
+    }
+
     private static PreparedGeneration PrepareExistingPlan(
         MusicGenerationPlan plan)
     {
@@ -422,7 +448,18 @@ public sealed class MusicGenerationApplicationService
 
         if (adoptedEntries.Length == 0)
         {
-            errors.Add(UiText.Get("Generation.Preflight.NoAdoptedAssets"));
+            errors.Add(UiText.Get(
+                prepared.SkippedTracks.Count > 0
+                    ? "Generation.Preflight.AllTracksSkipped"
+                    : "Generation.Preflight.NoAdoptedAssets"));
+        }
+
+        if (prepared.SkippedTracks.Count > 0)
+        {
+            warnings.Add(UiText.Format(
+                "Generation.Preflight.SkippedTracksWarning",
+                prepared.SkippedTracks.Count));
+            warnings.AddRange(prepared.SkippedTracks.Select(track => track.Message));
         }
 
         var missingAssets = adoptedEntries.Count(entry => entry.Asset is null);
@@ -470,7 +507,10 @@ public sealed class MusicGenerationApplicationService
             resolution?.IntegrationTargets.Count ?? 0,
             conflicts.Count,
             errors,
-            warnings);
+            warnings)
+        {
+            SkippedTracks = prepared.SkippedTracks
+        };
     }
 
     private static void ReportProgress(
@@ -522,5 +562,12 @@ public sealed class MusicGenerationApplicationService
 
     private sealed record PreparedGeneration(
         MusicGenerationPlan Plan,
-        MusicPlanApplyResult PlanApplication);
+        MusicPlanApplyResult PlanApplication)
+    {
+        /// <summary>The plan as the caller owns it, before unsupported Tracks were removed.</summary>
+        public MusicGenerationPlan SourcePlan { get; init; } = Plan;
+
+        public IReadOnlyList<MusicGenerationSkippedTrack> SkippedTracks { get; init; } =
+            Array.Empty<MusicGenerationSkippedTrack>();
+    }
 }

@@ -28,6 +28,19 @@ public sealed class UiTextTests
         }
     }
 
+    [Theory]
+    [InlineData("ja-JP", UiLanguage.Japanese)]
+    [InlineData("ja", UiLanguage.Japanese)]
+    [InlineData("en-US", UiLanguage.English)]
+    [InlineData("fr-FR", UiLanguage.English)]
+    public void FromCultureSuggestsJapaneseOnlyForJapaneseSystems(string culture, string expected)
+    {
+        Assert.Equal(
+            expected,
+            UiLanguage.FromCulture(System.Globalization.CultureInfo.GetCultureInfo(culture)));
+        Assert.Equal(UiLanguage.English, UiLanguage.FromCulture(null));
+    }
+
     [Fact]
     public void UnknownKeyFailsInsteadOfLeakingAPlaceholderIntoTheUi()
     {

@@ -424,7 +424,7 @@ public static class MusicConditionFormatter
     public static string CreateRecordKey(MusicConditionSource condition)
     {
         ArgumentNullException.ThrowIfNull(condition);
-        return string.Join(
+        var key = string.Join(
             "\u001f",
             condition.FunctionName,
             condition.CompareOperator,
@@ -450,5 +450,11 @@ public static class MusicConditionFormatter
             (condition.SecondUnusedIntParameter ?? 0).ToString(CultureInfo.InvariantCulture),
             condition.FirstUnusedStringParameter ?? string.Empty,
             condition.SecondUnusedStringParameter ?? string.Empty);
+
+        // Appended only when present so the keys of every other condition, and
+        // the Track keys persisted in drafts, stay identical.
+        return condition.StageIndex is { } stageIndex
+            ? key + "\u001fStage=" + stageIndex.ToString(CultureInfo.InvariantCulture)
+            : key;
     }
 }
